@@ -1,0 +1,132 @@
+{
+  "provenance": {
+    "note": "Captured from a live account after CloudWatch Logs retention (14 days on two of three assistant log groups, 30 on the third) had already expired part of the original analysis window. DESIGN.md records the fuller original capture of 1,205 events / 132 token-bearing spans; this manifest describes THIS fixture.",
+    "redaction": "Length-preserving and structure-preserving. Letters -> x, digits -> 0, punctuation kept. JSON keys preserved, leaf string values redacted.",
+    "log_retention_days": {
+      "two_groups": 14,
+      "one_group": 30
+    }
+  },
+  "corpus": {
+    "events": 928,
+    "event_types": {
+      "TRANSCRIPT_CREATE_SESSION": 32,
+      "TRANSCRIPT_UTTERANCE": 18,
+      "TRANSCRIPT_ORCHESTRATION_MESSAGE": 306,
+      "TRANSCRIPT_AGENTIC_MESSAGE": 162,
+      "TRANSCRIPT_AI_AGENT_TRACE": 238,
+      "TRANSCRIPT_LARGE_LANGUAGE_MODEL_INVOCATION": 164,
+      "TRANSCRIPT_SESSION_POLLED": 3,
+      "TRANSCRIPT_TRIGGER_DETECTION_MODEL_INVOCATION": 1,
+      "TRANSCRIPT_RECOMMENDATION": 1,
+      "TRANSCRIPT_INTENT_TRIGGERING_REFERENCE": 1,
+      "TRANSCRIPT_SELF_SERVICE_MESSAGE": 2
+    },
+    "trace_events": 238,
+    "spans_parsed": 238,
+    "parse_failures": 0,
+    "span_names": {
+      "inference": 111,
+      "invoke_agent": 86,
+      "execute_tool": 33,
+      "escalate_agent": 6,
+      "barge_in": 2
+    },
+    "token_bearing_inference_spans": 106
+  },
+  "reconciliation": {
+    "ok": 106,
+    "mismatch": 0,
+    "skipped_non_numeric": 0,
+    "skipped_absent_total": 0
+  },
+  "tokens": {
+    "total": 700853,
+    "input_fresh": 658209,
+    "output": 16838,
+    "cache_read": 21505,
+    "cache_write": 4301,
+    "identity_holds": true,
+    "input_share": 0.9392,
+    "output_share": 0.024,
+    "cache_share": 0.0368
+  },
+  "cache": {
+    "state_by_agent": {
+      "Veolia-Waste-SelfService-Agent": {
+        "state": "OFF",
+        "spans": 46,
+        "tokens": 195158
+      },
+      "Bet365-Self-Service-Agent": {
+        "state": "ON",
+        "spans": 6,
+        "tokens": 62632
+      },
+      "tagalog-support": {
+        "state": "OFF",
+        "spans": 47,
+        "tokens": 391372
+      },
+      "demo-estonian": {
+        "state": "OFF",
+        "spans": 5,
+        "tokens": 45593
+      },
+      "UNKNOWN": {
+        "state": "OFF",
+        "spans": 2,
+        "tokens": 6098
+      }
+    },
+    "agents_off": 4,
+    "agents_total": 5,
+    "uncached_token_share": 0.9106,
+    "hit_ratio_where_active": 0.0316
+  },
+  "per_contact": {
+    "contacts": 22,
+    "median_tokens": 20198.0,
+    "p90_tokens": 62632.0,
+    "max_tokens": 185678,
+    "inference_calls_per_contact": 4.82
+  },
+  "latency": {
+    "ttft_p50": 683.5,
+    "ttft_p90": 1106.0,
+    "ttft_p99": 1502.0,
+    "ttft_n": 104
+  },
+  "reasoning": {
+    "chars_text": 24518,
+    "chars_reasoning": 22912,
+    "chars_tool": 7461,
+    "share_incl_tool": 0.4174,
+    "share_excl_tool": 0.4831,
+    "chars_per_output_token": 3.28,
+    "tokens_reasoning": 6950.8,
+    "tokens_text": 7305.5,
+    "tokens_tool": 2496.7,
+    "apportioned_spans": 105,
+    "unapportioned_spans": 1,
+    "zero_reasoning_spans": 36,
+    "distribution": {
+      "median": 0.4807,
+      "mean": 0.3611,
+      "min": 0.0,
+      "max": 0.8125,
+      "n": 105,
+      "zero_reasoning_spans": 36
+    }
+  },
+  "attribution": {
+    "models": {
+      "eu.anthropic.claude-haiku-4-5-20251001-v1:0": 104,
+      "eu.anthropic.claude-sonnet-4-6": 2
+    },
+    "finish_reasons": {
+      "[\"end_turn\"]": 73,
+      "[\"tool_use\"]": 31
+    }
+  }
+}

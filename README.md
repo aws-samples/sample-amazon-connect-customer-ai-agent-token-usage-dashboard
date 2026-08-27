@@ -1,93 +1,507 @@
-# acc-ai-agents-dashboard
+# Amazon Connect AI Agent Token Efficiency Dashboard
 
+> **Sample code for educational purposes only. Not for production use.**
 
+[![License: MIT-0](https://img.shields.io/badge/License-MIT--0-yellow.svg)](https://opensource.org/licenses/MIT-0)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![AWS CDK v2](https://img.shields.io/badge/AWS_CDK-v2-orange.svg)](https://docs.aws.amazon.com/cdk/v2/guide/home.html)
+[![Tests](https://img.shields.io/badge/tests-147%20passed-brightgreen.svg)]()
 
-## Getting started
+Cache, reasoning, and TTFT (time-to-first-token) observability for Amazon Connect
+AI agents (Amazon Q in Connect). Surfaces the efficiency signals Connect does not
+expose natively, plus an insights layer that turns those signals into ranked,
+evidence-backed actions.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+**Single data source: logs.** Runs from Connect Assistant event logs and
+`qconnect:ListSpans` for drill-down. No Lake Formation resource share, no
+`BatchAssociateAnalyticsDataSet` call required.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+---
 
-## Add your files
+## What this adds (not available anywhere else)
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+| Signal | Why it matters | Source |
+|---|---|---|
+| Prompt cache economics | No cache columns in `ai_prompt` data lake table. 81% of tokens uncached in validation. | Log span fields |
+| Time to first token (TTFT) | Data lake has total latency only. TTFT is the silence the caller hears. | `time_to_first_token_ms` |
+| Reasoning token share | `output_token` is one total. ~44% of output is reasoning the customer never sees. | `output_messages` parsing |
+| Barge-in token waste | Data lake has a boolean `invocation_success`. This attributes discarded tokens. | `status=ERROR, error_type=barge_in` |
+| Output ceiling proximity | `request_max_tokens` absent from data lake. Detects truncation risk. | Span field comparison |
+| Near-real-time alarms | Data lake is daily batch. This fires within minutes. | EMF metrics |
+| Context growth curve | Requires turn ordering within a contact. Not a metric. | Span ordering |
+| Instruction size overhead | `system_instructions` only in the span, not the data lake. | Character counting + calibrated coefficient |
+
+## What this deliberately does NOT rebuild
+
+The **31 built-in AI agent metrics** available through `connect:GetMetricDataV2`
+and the AI Agent Performance dashboard:
+
+**AI Agent:** `ACTIVE_AI_AGENTS`, `AI_AGENT_INVOCATIONS`,
+`AI_AGENT_INVOCATION_SUCCESS`, `AI_AGENT_INVOCATION_SUCCESS_RATE`,
+`AI_AGENT_RESPONSE_HELPFUL`, `AI_AGENT_RESPONSE_NOT_HELPFUL`,
+`AVG_AI_AGENT_CONVERSATION_TURNS`
+
+**AI Session:** `AI_HANDOFFS`, `AI_HANDOFF_RATE`, `AI_RESPONSE_COMPLETION_RATE`,
+`AI_INVOLVED_CONTACTS`, `AVG_AI_CONVERSATION_TURNS`, `COMPLETENESS_SCORE`,
+`FAITHFULNESS_SCORE`, `GOAL_SUCCESS_RATE`, `PROACTIVE_INTENTS_ANSWERED`,
+`PROACTIVE_INTENTS_DETECTED`, `PROACTIVE_INTENTS_ENGAGED`,
+`PROACTIVE_INTENT_ENGAGEMENT_RATE`, `PROACTIVE_INTENT_RESPONSE_RATE`
+
+**AI Prompt:** `AI_PROMPT_INVOCATIONS`, `AI_PROMPT_INVOCATION_SUCCESS`,
+`AI_PROMPT_INVOCATION_SUCCESS_RATE`, `AVG_AI_PROMPT_INVOCATION_LATENCY`
+
+**AI Tool:** `AI_TOOL_INVOCATIONS`, `AI_TOOL_INVOCATION_SUCCESS`,
+`AI_TOOL_INVOCATION_SUCCESS_RATE`, `AI_TOOL_PARAMETER_ACCURACY`,
+`AI_TOOL_SELECTION_ACCURACY`, `AI_TOOL_UTILIZATION_ACCURACY`,
+`AVG_AI_TOOL_INVOCATION_LATENCY`
+
+**AI Knowledge Base:** `KNOWLEDGE_CONTENT_REFERENCES`
+
+Use those from the OOTB AI Agent Performance dashboard or `GetMetricDataV2`
+directly.
+
+## What is out of scope
+
+| Capability | Why excluded | Where to get it |
+|---|---|---|
+| Model-evaluated quality scores | LLM-evaluated, 24h refresh cycle | `ai_session.goal_success_rate`, `faithfulness_score`, `completeness_score` |
+| Customer sentiment | Tested and falsified: r=+0.043, n=7, near-constant DV | `contact_lens_conversational_analytics.sentiment_*` |
+| Talk-time, silence, interruption measures | Contact Lens voice-only, disjoint from chat | `contact_lens_conversational_analytics.non_talk_time_total_ms` |
+| Thumbs-up / thumbs-down feedback | Captured via a different event | `TRANSCRIPT_RESULT_FEEDBACK` events |
+| Token cost in dollars | Connect bills per minute/message, not per token | Cost Explorer `ai-end-customer-mins`, `ai-chat-message` |
+
+These four capability classes are available via the Connect analytics data lake as
+an optional upgrade path (see below).
+
+## Falsified findings (excluded by evidence)
+
+Two widgets were designed, tested, and deliberately excluded:
+
+1. **Token consumption vs customer sentiment** — Correlation r=+0.043 at n=7 with
+   sentiment taking only 4 distinct values (4 of 7 at zero). All correlations weak
+   and positive (opposite to hypothesis). The relationship does not exist in this
+   data.
+
+2. **Input tokens drive total invocation duration** — t=1.74 (not significant) on
+   the 132-span corpus, but t significant on the 106-span corpus. Sign flips
+   across subgroups. Status: unresolved, not refuted. Excluded for measured sample
+   dependence — a metric that reverses between samples should not be on a dashboard.
+
+---
+
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.aws.dev/abilasc/acc-ai-agents-dashboard.git
-git branch -M main
-git push -uf origin main
+/aws/wisdom/* log groups
+  -> [Level 0] Logs Insights saved queries (10 queries, zero infrastructure)
+  -> [Level 1] subscription filter -> Lambda -> EMF metrics -> dashboard + alarms
+  -> [Level 2] + Firehose -> S3 Span_Store -> Glue -> Athena curated views (9)
+                                                    -> Named queries (6)
+
+Drill-down: contact_id -> DescribeContact -> WisdomInfo.SessionArn -> ListSpans
+Channel:    contact_id -> DescribeContact -> Channel (VOICE/CHAT)
+Model meta: qconnect:ListModels -> caching support, lifecycle, EOL
 ```
 
-## Integrate with your tools
+### Deployment levels (additive)
 
-- [ ] [Set up project integrations](https://gitlab.aws.dev/abilasc/acc-ai-agents-dashboard/-/settings/integrations)
+| Level | What you get | Infrastructure cost |
+|---|---|---|
+| **LEVEL_0** | 10 saved Logs Insights queries. Zero compute, zero storage. | $0 (queries cost ~$0.005 per GB scanned) |
+| **LEVEL_1** | + Lambda parser, EMF metrics, CloudWatch dashboard, 3 alarms | ~$7-10/month |
+| **LEVEL_2** | + S3 Span_Store, Firehose, Glue, Athena views, named queries | ~$10-15/month |
 
-## Collaborate with your team
+---
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Prerequisites
 
-## Test and Deploy
+1. **AWS credentials** for the target account with permissions listed below.
 
-Use the built-in continuous integration in GitLab.
+2. **Connect AI agent logging enabled** on each assistant:
+   ```bash
+   # Per assistant — replace with your assistant ARN
+   aws logs put-delivery-source \
+     --name "wisdom-<assistant-name>" \
+     --resource-arn "arn:aws:wisdom:<region>:<account>:assistant/<id>" \
+     --log-type EVENT_LOGS
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+   aws logs put-delivery-destination \
+     --name "wisdom-<assistant-name>-dest" \
+     --output-format json \
+     --delivery-destination-configuration \
+       destinationResourceArn="arn:aws:logs:<region>:<account>:log-group:/aws/wisdom/<assistant-name>"
 
-***
+   aws logs create-delivery \
+     --delivery-source-name "wisdom-<assistant-name>" \
+     --delivery-destination-arn "<destination-arn>"
+   ```
 
-# Editing this README
+3. **AI agent traces enabled** (for drill-down): call recording ON, *Enable Bot
+   Analytics, Transcripts, and AI Agent Traces*, *Enable Automated Interaction
+   Logs*. Re-toggle if enabled before 5 Jun 2026.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+4. **Python 3.11+** and **AWS CDK v2**:
+   ```bash
+   npm install -g aws-cdk
+   pip install -e ".[infra,dev]"
+   ```
 
-## Suggestions for a good README
+5. **CDK bootstrap** (one-time per account/region):
+   ```bash
+   cdk bootstrap aws://<ACCOUNT_ID>/<REGION>
+   ```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+---
 
-## Name
-Choose a self-explaining name for your project.
+## Deploy
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```bash
+cd infra
+cdk deploy
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Single command. Provisions all resources for the configured deployment level.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Configuration
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+Edit `infra/app.py`:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```python
+env = cdk.Environment(account="YOUR_ACCOUNT", region="YOUR_REGION")
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+IngestionStack(
+    app,
+    "ConnectAITokenEfficiency",
+    env=env,
+    assistant_log_groups=[
+        "/aws/wisdom/your-assistant-1",
+        "/aws/wisdom/your-assistant-2",
+    ],
+    connect_instance_ids=[
+        "your-instance-id-1",
+        "your-instance-id-2",
+    ],
+)
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+### Backfill historical data
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+The subscription filter captures new events only. To load history (within log
+retention):
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```bash
+python scripts/backfill.py
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### Teardown
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```bash
+cd infra && cdk destroy
+```
+
+Removes all resources. S3 bucket is configured with `autoDeleteObjects`.
+
+---
+
+## Required IAM permissions
+
+### Lambda execution role (provisioned automatically)
+
+| Action | Scope |
+|---|---|
+| `connect:DescribeContact` | Configured instance ARNs only (`instance/*/contact/*`) |
+| `firehose:PutRecordBatch` | The provisioned delivery stream |
+| `dynamodb:GetItem`, `PutItem` | The channel cache table |
+| `s3:PutObject` | The Span_Store bucket |
+
+### Views Creator Lambda (provisioned automatically)
+
+| Action | Scope |
+|---|---|
+| `athena:StartQueryExecution`, `GetQueryExecution` | `*` (Athena has no resource-level scoping) |
+| `glue:GetDatabase`, `GetTable`, `GetPartitions`, `CreateTable`, `UpdateTable`, `DeleteTable` | The `connect_ai_token_efficiency` database |
+| `s3:GetObject`, `PutObject`, `ListBucket`, `GetBucketLocation` | Span_Store bucket + Athena results bucket |
+
+### Deploying user/role
+
+Standard CDK deployment permissions (CloudFormation, IAM, Lambda, S3, DynamoDB,
+Firehose, Glue, Athena, CloudWatch, Logs).
+
+---
+
+## What you get after deploy
+
+### CloudWatch Dashboard: `ConnectAI-TokenEfficiency`
+
+13 widgets across 4 sections:
+- **Token Economics:** Tokens/contact, TTFT p50/p90 with 3s threshold, barge-in waste
+- **Cache Economics:** Hit ratio, token composition (read/write/fresh), total vs cached
+- **Reasoning Efficiency:** Share (incl/excl tool), absolute tokens, output ceiling hits
+- **Operational Health:** Reconciliation mismatches, decode speed monitor, pipeline throughput
+
+### 3 CloudWatch Alarms
+
+| Alarm | Trigger | Threshold |
+|---|---|---|
+| `ConnectAI-ContextLeak-TokensPerContact` | Tokens/contact exceeds baseline | 50,000 (placeholder) |
+| `ConnectAI-TTFT-P90-DeadAir` | TTFT p90 exceeds caller patience | 3,000 ms |
+| `ConnectAI-CacheRegression` | Cache hit ratio drops | 30% |
+
+Replace thresholds with your baseline after 14 days of data.
+
+### 10 Logs Insights Saved Queries (Level 0)
+
+Available in CloudWatch > Logs Insights > Saved queries:
+- `L0 - Token Summary`
+- `L0 - Tokens per Agent`
+- `L0 - TTFT Percentiles`
+- `L0 - Cache State per Agent`
+- `L0 - Model Attribution`
+- `L0 - Tokens per Contact`
+- `L0 - Barge-In Token Waste`
+- `L0 - Output Ceiling Proximity`
+- `L0 - System Instruction Size per Agent`
+- `L0 - Span Type Overview`
+
+### 9 Athena Curated Views
+
+Database: `connect_ai_token_efficiency`
+
+| View | Purpose |
+|---|---|
+| `v_span_enriched` | All spans, all fields — the base table |
+| `v_contact_rollup` | Per-contact totals (tokens, model time, tool time, reasoning, escalation) |
+| `v_agent_daily` | Per-agent per-day summary |
+| `v_cache_state` | ON/OFF/MIXED per agent with hit ratio |
+| `v_reasoning_split` | Reasoning share per agent (both denominators) |
+| `v_latency_percentiles` | TTFT and duration per agent per model |
+| `v_context_growth` | Input tokens by turn ordinal |
+| `v_model_capability` | Per-model aggregates |
+| `v_data_quality` | Reconciliation and coverage health |
+
+### 6 Athena Named Queries
+
+- `connect-ai-context_growth_curve`
+- `connect-ai-cache_warmup_profile`
+- `connect-ai-agent_version_comparison`
+- `connect-ai-reasoning_distribution`
+- `connect-ai-token_outlier_contacts`
+- `connect-ai-daily_token_summary`
+
+---
+
+## Calibrated constants
+
+All measured against the validation dataset (n=132 token-bearing spans).
+
+| Constant | Value | Provenance |
+|---|---|---|
+| Characters per input token | 3.63 | Regression on `usage_input_tokens + cache` vs `len(system_instructions + input_messages)`, R²=0.971 |
+| Prompt token intercept | 403 tokens | Same regression intercept (tool-definition overhead) |
+| Characters per output token | 3.45 | `output_messages` chars / `usage_output_tokens` |
+| ms per output token | 9.25 | Bootstrap CI [7.94, 11.60]. Decode-time r=+0.870. Validated 7 ways. |
+| ms per 1,000 input tokens (TTFT) | 33.6 | Monotonic across 5 quintiles. Excludes one 8,420ms cold-start outlier. |
+
+**Important:** `len(text) / 4` underestimates token count by a median of 14.6%.
+Use `len(text) / 3.63 + 403` instead.
+
+**Model caveat:** 131 of 132 spans are `eu.anthropic.claude-haiku-4-5`. These
+are Haiku numbers. Recompute per model as traffic diversifies.
+
+---
+
+## Connecting BI tools
+
+The Curated Views are the interface. Any SQL-capable tool can consume them.
+
+### Amazon Managed Grafana (~$9/editor, $5/viewer per month)
+
+The only option that queries both CloudWatch metrics AND Athena in one pane.
+
+1. Create a Grafana workspace in the same region
+2. Add CloudWatch data source (auto-configured via IAM)
+3. Add Athena data source → database `connect_ai_token_efficiency`
+4. Import the dashboard JSON or build panels from the views
+
+### Amazon QuickSight / Quick Suite (~$3/reader per month)
+
+Best for business users. Connects to Athena natively.
+
+1. Create a QuickSight account
+2. New Dataset → Athena → database `connect_ai_token_efficiency`
+3. Select a view (e.g., `v_agent_daily`)
+4. Build analyses and dashboards
+
+**Limitation:** QuickSight cannot query CloudWatch metrics. Use it for Athena views
+only. The $3 Reader tier excludes generative/NL features — those require Plus
+($20/user).
+
+### Tableau / Power BI
+
+Both connect to Athena via JDBC/ODBC:
+- Endpoint: `athena.<region>.amazonaws.com`
+- Port: 443
+- Database: `connect_ai_token_efficiency`
+- Authentication: IAM credentials or SAML
+
+---
+
+## Cost model
+
+### Verified infrastructure costs (at ~10,000 contacts/month, ~47,000 spans)
+
+| Resource | Monthly cost | Notes |
+|---|---|---|
+| Lambda | ~$1-2 | 512MB, ~5s avg, 47k invocations |
+| DynamoDB | <$1 | On-demand, ~10k items, TTL cleanup |
+| S3 Span_Store | <$1 | ~100-200MB/month Parquet-ready JSON |
+| Firehose | ~$1 | Per-GB ingestion |
+| CloudWatch custom metrics | ~$3-5 | 5 dimension sets × ~13 metrics |
+| CloudWatch dashboard | $3 | Fixed per dashboard |
+| Athena queries (on-demand) | <$1 | $5/TB scanned, data is ~MB |
+| Glue Data Catalog | $0 | Free for first million objects |
+| **Total Level 2** | **~$10-15/month** | |
+| **Total Level 1** (no S3/Firehose/Glue) | **~$7-10/month** | |
+| **Total Level 0** | **$0** | Queries cost ~$0.005/GB scanned |
+
+### What drives cost up
+
+- **Dimension cardinality:** 5 fixed dimension sets keeps it bounded. Adding more
+  dimensions multiplies metric cost.
+- **Firehose minimum billing:** 5KB per record. Packing to ~1MB records (as
+  implemented) avoids the 2.5x penalty.
+- **Athena scan size:** Date partitioning + columnar views keeps scans small.
+
+---
+
+## Log retention constraint
+
+| Log group | Retention | Impact |
+|---|---|---|
+| `/aws/wisdom/AnyCompany-Fraud-Alerts-AgentAssist` | 14 days | Level 0 max history = 14 days |
+| `/aws/wisdom/bet365-assistant-...` | 14 days | Baseline window must fit within retention |
+| `/aws/wisdom/tagalog-support` | 30 days | |
+
+**Consequences:**
+- A 14-day alarm baseline on a 14-day log group has zero margin
+- Re-retrieving the corpus after the retention window returned 928 of 1,205
+  original events (23% lost)
+- **Level 2 Span_Store is the only durable history** — this is the strongest
+  argument for Level 2 over Level 1
+
+---
+
+## Optional upgrade: Connect analytics data lake
+
+For the four capability classes logs cannot supply, associate the 5 AI datasets:
+
+```bash
+aws connect batch-associate-analytics-data-set \
+  --instance-id <your-instance-id> \
+  --data-set-ids ai_prompt ai_session ai_agent ai_tool ai_agent_knowledge_base \
+  --target-account-id <your-account-id>
+```
+
+**Warning:** This creates a Lake Formation resource share.
+
+| Dataset | What it adds |
+|---|---|
+| `ai_prompt` | `input_token`, `output_token`, `model_id` (overlaps this dashboard) |
+| `ai_session` | `goal_success_rate`, `faithfulness_score`, `completeness_score`, `is_handed_off` |
+| `ai_tool` | `ai_tool_name`, accuracy scores |
+| `ai_agent` | Invocation counts, helpfulness ratings |
+| `ai_agent_knowledge_base` | KB reference tracking |
+
+Join to `contact_lens_conversational_analytics` on `contact_id` for sentiment
+and talk-time measures.
+
+---
+
+## Validation dataset
+
+Built and validated against: account `101506645078`, region `eu-west-2`,
+3 assistant log groups, 1,205 events, 296 spans, 132 token-bearing inference
+spans, 28 contacts, 23 Jul - 6 Aug 2026.
+
+**Key findings:**
+- 74.8% of voice dead air is model inference time (independently corroborated
+  via Contact Lens `NonTalkTime` across 7 voice contacts)
+- 9.25 ms per output token (bootstrap CI [7.94, 11.60], 108 tokens/sec)
+- 43.7% of output characters are reasoning (51.2% excluding tool payloads) on
+  the original 132-span corpus. Current retained corpus (106 spans): 41.7% / 48.3%
+- Token identity verified with 0 mismatches across 132 spans
+- `usage_input_tokens` is FRESH input only — summing input + output undercounts
+  by 4,301 tokens/turn when caching is active
+- Channel split is 50/50 VOICE/CHAT (14/14 contacts)
+- Chat escalation rate is 86% vs 32% blended — never blend channels
+- Assistant log delivery lag: p50 5.9s, p90 10.4s, p99 11.4s, max 22.7s
+
+**Sample-size caveat:** 28 contacts, 132 token-bearing spans, 7 non-contiguous
+days, 3 of 6 agents at 5 or fewer calls, 131 of 132 spans on a single model.
+Sufficient to validate schema and method. Insufficient to set thresholds.
+
+---
+
+## Evidence base
+
+All coefficients, field-availability facts, and negative results are recorded in
+`DESIGN.md` in the repository root. That document is the evidence base and is
+preserved as-is.
+
+---
+
+## Repository structure
+
+```
+src/connect_ai_tokens/     Core library (Lambda handler + all components)
+  span_parser.py           Depth-aware parser for Java toString span format
+  reconciliation.py        Token identity verification
+  reasoning.py             Reasoning apportionment from output_messages
+  channel.py               Channel resolution via DescribeContact
+  metrics.py               EMF metric publisher (5 bounded dimension sets)
+  stats_gate.py            Statistical integrity guardrails
+  insights.py              Regression detector, recommendations, comparison
+  model_catalog.py         ListModels wrapper
+  trace_viewer.py          Custom widget Lambda (voice + chat)
+  handler.py               Lambda entry point
+  config.py                Environment-driven configuration
+  constants.py             Calibrated constants with provenance
+
+infra/                     CDK application
+  app.py                   Entry point (account, region, log groups)
+  stacks/ingestion.py      All resources (Lambda, DDB, Firehose, S3, Glue, etc.)
+  dashboard.py             CloudWatch dashboard JSON
+  queries.py               Athena named queries
+  query_library.py         Level 0 Logs Insights queries
+  views_cr.py              Custom resource for Athena view creation
+
+scripts/
+  backfill.py              Historical data loader
+  create_views.py          Standalone view creation (superseded by CR)
+  create_dashboard.py      Standalone dashboard creation (superseded by CDK)
+
+tests/                     121 tests (pytest + hypothesis)
+  fixtures/                Validated production spans
+  test_span_parser.py      32 tests including round-trip property
+  test_reconciliation.py   11 tests (0-mismatch assertion)
+  test_reasoning.py        13 tests (conservation property)
+  test_channel.py          16 tests (cache, retry, negative cache)
+  test_metrics.py          15 tests (dimension sets, cache state)
+  test_stats_gate.py       20 tests (suppression calibration)
+  test_handler.py          14 tests (batch isolation, EMF output)
+
+DESIGN.md                  Evidence base (preserved as-is)
+```
+
+
+---
+
+## Security
+
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more
+information.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE)
+file.
