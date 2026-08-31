@@ -164,32 +164,46 @@ Single command. Provisions all resources for the configured deployment level.
 
 ### Configuration
 
-Edit `infra/app.py`:
+No identifiers are hardcoded. Configure via CDK context — either edit the
+`context` block in `infra/cdk.json`:
 
-```python
-env = cdk.Environment(account="YOUR_ACCOUNT", region="YOUR_REGION")
-
-IngestionStack(
-    app,
-    "ConnectAITokenEfficiency",
-    env=env,
-    assistant_log_groups=[
-        "/aws/wisdom/your-assistant-1",
-        "/aws/wisdom/your-assistant-2",
-    ],
-    connect_instance_ids=[
-        "your-instance-id-1",
-        "your-instance-id-2",
-    ],
-)
+```json
+{
+  "app": "python3 app.py",
+  "context": {
+    "assistant_log_groups": "/aws/wisdom/your-assistant-1,/aws/wisdom/your-assistant-2",
+    "connect_instance_ids": "your-instance-id-1,your-instance-id-2"
+  }
+}
 ```
+
+Or pass them on the command line:
+
+```bash
+cdk deploy \
+  -c assistant_log_groups="/aws/wisdom/your-assistant-1,/aws/wisdom/your-assistant-2" \
+  -c connect_instance_ids="your-instance-id-1,your-instance-id-2"
+```
+
+Account and region default to your AWS credentials (`CDK_DEFAULT_ACCOUNT` /
+`CDK_DEFAULT_REGION`). Override with `-c account=...` and `-c region=...` if needed.
 
 ### Backfill historical data
 
 The subscription filter captures new events only. To load history (within log
-retention):
+retention), set the environment variables from your stack outputs, then run:
 
 ```bash
+# Get the values from the deployed stack
+aws cloudformation describe-stacks --stack-name ConnectAITokenEfficiency \
+  --query 'Stacks[0].Outputs' --output table
+
+export AWS_REGION="your-region"
+export ASSISTANT_LOG_GROUPS="/aws/wisdom/your-assistant-1,/aws/wisdom/your-assistant-2"
+export CONNECT_INSTANCE_IDS="your-instance-id-1,your-instance-id-2"
+export DELIVERY_STREAM_NAME="<DeliveryStream output>"
+export CHANNEL_CACHE_TABLE="<ChannelCacheTable output>"
+
 python scripts/backfill.py
 ```
 

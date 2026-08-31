@@ -27,25 +27,48 @@ from connect_ai_tokens.config import Config, DeploymentLevel
 from connect_ai_tokens.handler import pack_for_firehose, process
 from connect_ai_tokens.metrics import MetricPublisher
 
-REGION = "eu-west-2"
+# All configuration comes from environment variables — no hardcoded identifiers.
+# Retrieve the stream / table names from the CDK stack outputs after deploy:
+#   aws cloudformation describe-stacks --stack-name ConnectAITokenEfficiency \
+#     --query 'Stacks[0].Outputs'
+REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
 LOG_GROUPS = [
-    "/aws/wisdom/tagalog-support",
-    "/aws/wisdom/bet365-assistant-bet365-demo-v3-AssistantStack-QX913GJCE6MQ",
-    "/aws/wisdom/AnyCompany-Fraud-Alerts-AgentAssist",
+    lg.strip()
+    for lg in os.environ.get("ASSISTANT_LOG_GROUPS", "").split(",")
+    if lg.strip()
 ]
-STREAM = os.environ.get(
-    "DELIVERY_STREAM_NAME", "ConnectAITokenEfficiency-SpanStream-EXSsc2jXViNr"
-)
-CACHE_TABLE = os.environ.get(
-    "CHANNEL_CACHE_TABLE",
-    "ConnectAITokenEfficiency-ChannelCacheC9FE6E41-1E3348266JGGW",
-)
-INSTANCE_IDS = os.environ.get(
-    "CONNECT_INSTANCE_IDS",
-    "1de8296e-1e15-4af6-b842-9a5a38d9873c,"
-    "cd54ca0b-aac4-42a5-9e6a-dd201aa135be,"
-    "cf6475f7-06ea-424e-8ca0-a7c6a03dd6f6",
-).split(",")
+STREAM = os.environ.get("DELIVERY_STREAM_NAME")
+CACHE_TABLE = os.environ.get("CHANNEL_CACHE_TABLE")
+INSTANCE_IDS = [
+    i.strip()
+    for i in os.environ.get("CONNECT_INSTANCE_IDS", "").split(",")
+    if i.strip()
+]
+
+
+def _require_config() -> None:
+    missing = [
+        name
+        for name, val in [
+            ("AWS_REGION", REGION),
+            ("ASSISTANT_LOG_GROUPS", LOG_GROUPS),
+            ("DELIVERY_STREAM_NAME", STREAM),
+            ("CHANNEL_CACHE_TABLE", CACHE_TABLE),
+            ("CONNECT_INSTANCE_IDS", INSTANCE_IDS),
+        ]
+        if not val
+    ]
+    if missing:
+        raise SystemExit(
+            "Missing required environment variables: "
+            + ", ".join(missing)
+            + "\nSet them from the CDK stack outputs, e.g.:\n"
+            '  export AWS_REGION="eu-west-2"\n'
+            '  export ASSISTANT_LOG_GROUPS="/aws/wisdom/your-assistant"\n'
+            '  export DELIVERY_STREAM_NAME="<from stack output DeliveryStream>"\n'
+            '  export CHANNEL_CACHE_TABLE="<from stack output ChannelCacheTable>"\n'
+            '  export CONNECT_INSTANCE_IDS="<your-instance-id>"'
+        )
 
 
 def fetch_all_events(logs_client) -> list[dict]:
@@ -63,6 +86,7 @@ def fetch_all_events(logs_client) -> list[dict]:
 
 
 def main() -> int:
+    _require_config()
     logs_client = boto3.client("logs", region_name=REGION)
     connect_client = boto3.client("connect", region_name=REGION)
     firehose_client = boto3.client("firehose", region_name=REGION)
@@ -126,7 +150,6 @@ def main() -> int:
     print(f"\nBackfill complete. {len(packed)} records sent to Firehose.")
     print(f"Data will be queryable in Athena after the next Firehose flush (~5 min).")
     print(f"  Table: connect_ai_token_efficiency.spans")
-    print(f"  Bucket: s3://{os.environ.get('SPAN_STORE_BUCKET', 'connectaitokenefficiency-spanstore99fe5a59-ztuuckhwcoch')}/spans/")
     return 0
 
 

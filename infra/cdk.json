@@ -1,3 +1,10 @@
 {
-  "app": "python3 app.py"
+  "app": "python3 app.py",
+  "context": {
+    "_comment": "Configure your deployment here. account/region are optional (default to your AWS credentials). assistant_log_groups and connect_instance_ids are required — comma-separated, no spaces needed.",
+    "account": "",
+    "region": "",
+    "assistant_log_groups": "/aws/wisdom/your-assistant-name",
+    "connect_instance_ids": "your-connect-instance-id"
+  }
 }
