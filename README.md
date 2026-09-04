@@ -7,29 +7,36 @@
 [![AWS CDK v2](https://img.shields.io/badge/AWS_CDK-v2-orange.svg)](https://docs.aws.amazon.com/cdk/v2/guide/home.html)
 [![Tests](https://img.shields.io/badge/tests-147%20passed-brightgreen.svg)]()
 
-Cache, reasoning, and TTFT (time-to-first-token) observability for Amazon Connect
-AI agents (Amazon Q in Connect). Surfaces the efficiency signals Connect does not
-expose natively, plus an insights layer that turns those signals into ranked,
-evidence-backed actions.
+Token, cache, reasoning, and time-to-first-token (TTFT) insights for Amazon
+Connect AI agents (Amazon Q in Connect). This sample surfaces usage signals that
+the built-in AI Agent Performance dashboard and the Connect analytics data lake
+do not expose, and adds an insights layer that ranks them into evidence-backed
+actions.
 
-**Single data source: logs.** Runs from Connect Assistant event logs and
-`qconnect:ListSpans` for drill-down. No Lake Formation resource share, no
-`BatchAssociateAnalyticsDataSet` call required.
+It reads from Amazon Connect Assistant event logs and `qconnect:ListSpans`. It
+requires no Lake Formation resource share and no `BatchAssociateAnalyticsDataSet`
+call.
 
 ---
 
-## What this adds (not available anywhere else)
+## What this adds
+
+These signals are not available in the OOTB AI Agent Performance dashboard or the
+Connect analytics data lake. Each row cites the log field it derives from.
 
 | Signal | Why it matters | Source |
 |---|---|---|
-| Prompt cache economics | No cache columns in `ai_prompt` data lake table. 81% of tokens uncached in validation. | Log span fields |
-| Time to first token (TTFT) | Data lake has total latency only. TTFT is the silence the caller hears. | `time_to_first_token_ms` |
-| Reasoning token share | `output_token` is one total. ~44% of output is reasoning the customer never sees. | `output_messages` parsing |
-| Barge-in token waste | Data lake has a boolean `invocation_success`. This attributes discarded tokens. | `status=ERROR, error_type=barge_in` |
-| Output ceiling proximity | `request_max_tokens` absent from data lake. Detects truncation risk. | Span field comparison |
-| Near-real-time alarms | Data lake is daily batch. This fires within minutes. | EMF metrics |
-| Context growth curve | Requires turn ordering within a contact. Not a metric. | Span ordering |
-| Instruction size overhead | `system_instructions` only in the span, not the data lake. | Character counting + calibrated coefficient |
+| Prompt cache economics | No cache columns in the `ai_prompt` data lake table. 81% of tokens were uncached in the validation dataset. | Log span fields |
+| Time to first token (TTFT) | The data lake carries total latency only. TTFT is the silence the caller hears before the agent responds. | `time_to_first_token_ms` |
+| Reasoning token share | `output_token` is a single total. Roughly 44% of output was reasoning the customer never sees. | `output_messages` parsing |
+| Barge-in token waste | The data lake carries a boolean `invocation_success`. This attributes the tokens discarded when a caller interrupts. | `status=ERROR, error_type=barge_in` |
+| Output ceiling proximity | `request_max_tokens` is absent from the data lake. Detects truncation risk. | Span field comparison |
+| Near-real-time alarms | The data lake is daily batch. These alarms fire within minutes. | EMF metrics |
+| Context growth curve | Requires turn ordering within a contact. Not available as a metric. | Span ordering |
+| Instruction size overhead | `system_instructions` appears only in the span, not the data lake. | Character count + calibrated coefficient |
+
+See [`docs/signal-coverage.png`](docs/signal-coverage.png) for how these signals
+relate to the OOTB metrics and the data lake.
 
 ## What this deliberately does NOT rebuild
 
@@ -91,17 +98,21 @@ Two widgets were designed, tested, and deliberately excluded:
 
 ## Architecture
 
-```
-/aws/wisdom/* log groups
-  -> [Level 0] Logs Insights saved queries (10 queries, zero infrastructure)
-  -> [Level 1] subscription filter -> Lambda -> EMF metrics -> dashboard + alarms
-  -> [Level 2] + Firehose -> S3 Span_Store -> Glue -> Athena curated views (9)
-                                                    -> Named queries (6)
+![Architecture](docs/architecture.png)
 
-Drill-down: contact_id -> DescribeContact -> WisdomInfo.SessionArn -> ListSpans
-Channel:    contact_id -> DescribeContact -> Channel (VOICE/CHAT)
-Model meta: qconnect:ListModels -> caching support, lifecycle, EOL
-```
+Data sources (Connect Assistant logs, `qconnect:ListSpans`,
+`connect:DescribeContact`, `qconnect:ListModels`) feed three additive deployment
+levels. Level 0 runs saved Logs Insights queries with no infrastructure. Level 1
+adds a subscription filter, a Lambda parser, EMF metrics, a dashboard, and
+alarms. Level 2 adds a Firehose to an S3 Span_Store, a Glue catalog, and Athena
+curated views. Grafana, QuickSight, Tableau/Power BI, and the AWS consoles
+consume the outputs.
+
+The diagram source is [`docs/architecture.drawio`](docs/architecture.drawio)
+(open with the Draw.io editor). Two companion views:
+
+- [`docs/data-flow.png`](docs/data-flow.png) — the Lambda processing flow per invocation
+- [`docs/signal-coverage.png`](docs/signal-coverage.png) — what this sample adds vs what Connect already provides
 
 ### Deployment levels (additive)
 
@@ -117,9 +128,10 @@ Model meta: qconnect:ListModels -> caching support, lifecycle, EOL
 
 1. **AWS credentials** for the target account with permissions listed below.
 
-2. **Connect AI agent logging enabled** on each assistant:
+2. **Connect AI agent logging enabled** on each assistant. This requires the
+   `wisdom:AllowVendedLogDeliveryForResource` permission, then the CloudWatch
+   log-delivery APIs (run in order, per assistant):
    ```bash
-   # Per assistant — replace with your assistant ARN
    aws logs put-delivery-source \
      --name "wisdom-<assistant-name>" \
      --resource-arn "arn:aws:wisdom:<region>:<account>:assistant/<id>" \
@@ -135,10 +147,12 @@ Model meta: qconnect:ListModels -> caching support, lifecycle, EOL
      --delivery-source-name "wisdom-<assistant-name>" \
      --delivery-destination-arn "<destination-arn>"
    ```
+   See [Enable logging for AI agents](https://docs.aws.amazon.com/connect/latest/adminguide/monitor-ai-agents.html).
 
-3. **AI agent traces enabled** (for drill-down): call recording ON, *Enable Bot
-   Analytics, Transcripts, and AI Agent Traces*, *Enable Automated Interaction
-   Logs*. Re-toggle if enabled before 5 Jun 2026.
+3. **AI agent traces enabled** (for drill-down): call recording on, plus *Enable
+   Bot Analytics, Transcripts, and AI Agent Traces* and *Enable Automated
+   Interaction Logs* in the instance settings. AI agent traces are voice-channel
+   only; `qconnect:ListSpans` covers both voice and chat.
 
 4. **Python 3.11+** and **AWS CDK v2**:
    ```bash
@@ -334,35 +348,34 @@ are Haiku numbers. Recompute per model as traffic diversifies.
 
 ## Connecting BI tools
 
-The Curated Views are the interface. Any SQL-capable tool can consume them.
+The curated views are the interface. Any SQL-capable tool can consume them. See
+current pricing on each service's pricing page.
 
-### Amazon Managed Grafana (~$9/editor, $5/viewer per month)
+### Amazon Managed Grafana
 
-The only option that queries both CloudWatch metrics AND Athena in one pane.
+The only option that queries both CloudWatch metrics and Athena in one pane.
 
-1. Create a Grafana workspace in the same region
-2. Add CloudWatch data source (auto-configured via IAM)
-3. Add Athena data source → database `connect_ai_token_efficiency`
-4. Import the dashboard JSON or build panels from the views
+1. Create a Grafana workspace in the same Region.
+2. Add the CloudWatch data source (configured via IAM).
+3. Add the Athena data source, pointing at the `connect_ai_token_efficiency` database.
+4. Build panels from the views.
 
-### Amazon QuickSight / Quick Suite (~$3/reader per month)
+### Amazon QuickSight
 
-Best for business users. Connects to Athena natively.
+Suited to business users. Connects to Athena natively.
 
-1. Create a QuickSight account
-2. New Dataset → Athena → database `connect_ai_token_efficiency`
-3. Select a view (e.g., `v_agent_daily`)
-4. Build analyses and dashboards
+1. Create a dataset from the Athena data source.
+2. Select the `connect_ai_token_efficiency` database and a view (for example, `v_agent_daily`).
+3. Build analyses and dashboards.
 
-**Limitation:** QuickSight cannot query CloudWatch metrics. Use it for Athena views
-only. The $3 Reader tier excludes generative/NL features — those require Plus
-($20/user).
+QuickSight reads Athena, not CloudWatch metrics. Natural-language querying
+requires a paid QuickSight tier.
 
 ### Tableau / Power BI
 
-Both connect to Athena via JDBC/ODBC:
-- Endpoint: `athena.<region>.amazonaws.com`
-- Port: 443
+Both connect to Athena over JDBC/ODBC:
+
+- Endpoint: `athena.<region>.amazonaws.com`, port 443
 - Database: `connect_ai_token_efficiency`
 - Authentication: IAM credentials or SAML
 
@@ -398,18 +411,18 @@ Both connect to Athena via JDBC/ODBC:
 
 ## Log retention constraint
 
-| Log group | Retention | Impact |
-|---|---|---|
-| `/aws/wisdom/AnyCompany-Fraud-Alerts-AgentAssist` | 14 days | Level 0 max history = 14 days |
-| `/aws/wisdom/bet365-assistant-...` | 14 days | Baseline window must fit within retention |
-| `/aws/wisdom/tagalog-support` | 30 days | |
+Assistant log group retention bounds how far Level 0 and Level 1 can look back.
+In the validation account, two of three log groups retained 14 days and one
+retained 30 days.
 
 **Consequences:**
-- A 14-day alarm baseline on a 14-day log group has zero margin
-- Re-retrieving the corpus after the retention window returned 928 of 1,205
-  original events (23% lost)
-- **Level 2 Span_Store is the only durable history** — this is the strongest
-  argument for Level 2 over Level 1
+- A 14-day alarm baseline on a 14-day log group has zero margin.
+- Re-retrieving the corpus after the retention window returned 928 of the
+  original 1,205 events (23% lost).
+- The Level 2 Span_Store is the only durable history, which is the strongest
+  reason to adopt Level 2 over Level 1.
+
+Raise log retention, or shorten the baseline window, so the baseline can fill.
 
 ---
 
@@ -428,14 +441,15 @@ aws connect batch-associate-analytics-data-set \
 
 | Dataset | What it adds |
 |---|---|
-| `ai_prompt` | `input_token`, `output_token`, `model_id` (overlaps this dashboard) |
+| `ai_prompt` | `input_token`, `output_token`, `model_id` — raw tokens and model attribution that partially overlap this sample. Lacks cache tokens, TTFT, and the reasoning split. |
 | `ai_session` | `goal_success_rate`, `faithfulness_score`, `completeness_score`, `is_handed_off` |
 | `ai_tool` | `ai_tool_name`, accuracy scores |
 | `ai_agent` | Invocation counts, helpfulness ratings |
-| `ai_agent_knowledge_base` | KB reference tracking |
+| `ai_agent_knowledge_base` | Knowledge base reference tracking |
 
-Join to `contact_lens_conversational_analytics` on `contact_id` for sentiment
-and talk-time measures.
+Join to `contact_lens_conversational_analytics` on `contact_id` for sentiment and
+talk-time measures. The data lake is daily batch, so it does not replace the
+near-real-time path in this sample.
 
 ---
 
@@ -498,11 +512,9 @@ infra/                     CDK application
   views_cr.py              Custom resource for Athena view creation
 
 scripts/
-  backfill.py              Historical data loader
-  create_views.py          Standalone view creation (superseded by CR)
-  create_dashboard.py      Standalone dashboard creation (superseded by CDK)
+  backfill.py              Historical data loader (idempotent-safe)
 
-tests/                     121 tests (pytest + hypothesis)
+tests/                     147 tests (pytest + hypothesis)
   fixtures/                Validated production spans
   test_span_parser.py      32 tests including round-trip property
   test_reconciliation.py   11 tests (0-mismatch assertion)
@@ -511,6 +523,13 @@ tests/                     121 tests (pytest + hypothesis)
   test_metrics.py          15 tests (dimension sets, cache state)
   test_stats_gate.py       20 tests (suppression calibration)
   test_handler.py          14 tests (batch isolation, EMF output)
+  test_e2e.py              26 tests (full-pipeline replay against the manifest)
+
+docs/                      Architecture diagrams
+  architecture.drawio      Editable source (3 pages)
+  architecture.png         Deployment-level architecture
+  data-flow.png            Lambda processing flow
+  signal-coverage.png      Coverage vs OOTB and the data lake
 
 DESIGN.md                  Evidence base (preserved as-is)
 ```
