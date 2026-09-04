@@ -207,6 +207,14 @@ export CHANNEL_CACHE_TABLE="<ChannelCacheTable output>"
 python scripts/backfill.py
 ```
 
+**Re-running backfill is safe.** Firehose delivery is at-least-once and the
+script does not check what already landed in S3, so re-running writes the same
+spans again. Every Athena curated view deduplicates by `span_id` (see the
+`v_span_enriched` base view — all other views read from it), so no query,
+dashboard, or metric ever reflects a duplicate regardless of how many times
+backfill runs. If you also want the raw S3 objects to stay unique, empty the
+`spans/` prefix before re-running.
+
 ### Teardown
 
 ```bash
@@ -283,7 +291,7 @@ Database: `connect_ai_token_efficiency`
 
 | View | Purpose |
 |---|---|
-| `v_span_enriched` | All spans, all fields — the base table |
+| `v_span_enriched` | Deduplicated base view (one row per `span_id`) — all other views read from it |
 | `v_contact_rollup` | Per-contact totals (tokens, model time, tool time, reasoning, escalation) |
 | `v_agent_daily` | Per-agent per-day summary |
 | `v_cache_state` | ON/OFF/MIXED per agent with hit ratio |
