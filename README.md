@@ -21,8 +21,8 @@ call.
 
 ## What this adds
 
-These signals are not available in the OOTB AI Agent Performance dashboard or the
-Connect analytics data lake. Each row cites the log field it derives from.
+These signals are not available in the built-in AI Agent Performance dashboard or
+the Connect analytics data lake. Each row cites the log field it derives from.
 
 | Signal | Why it matters | Source |
 |---|---|---|
@@ -36,12 +36,13 @@ Connect analytics data lake. Each row cites the log field it derives from.
 | Instruction size overhead | `system_instructions` appears only in the span, not the data lake. | Character count + calibrated coefficient |
 
 See [`docs/signal-coverage.png`](docs/signal-coverage.png) for how these signals
-relate to the OOTB metrics and the data lake.
+relate to the built-in metrics and the data lake.
 
-## What this deliberately does NOT rebuild
+## What this does not rebuild
 
-The **31 built-in AI agent metrics** available through `connect:GetMetricDataV2`
-and the AI Agent Performance dashboard:
+Amazon Connect already provides the **31 built-in AI agent metrics** through
+`connect:GetMetricDataV2` and the AI Agent Performance dashboard. This sample
+intentionally leaves them in place:
 
 **AI Agent:** `ACTIVE_AI_AGENTS`, `AI_AGENT_INVOCATIONS`,
 `AI_AGENT_INVOCATION_SUCCESS`, `AI_AGENT_INVOCATION_SUCCESS_RATE`,
@@ -64,8 +65,8 @@ and the AI Agent Performance dashboard:
 
 **AI Knowledge Base:** `KNOWLEDGE_CONTENT_REFERENCES`
 
-Use those from the OOTB AI Agent Performance dashboard or `GetMetricDataV2`
-directly.
+Please use those directly from the AI Agent Performance dashboard or
+`connect:GetMetricDataV2`.
 
 ## What is out of scope
 
@@ -118,9 +119,9 @@ The diagram source is [`docs/architecture.drawio`](docs/architecture.drawio)
 
 | Level | What you get | Infrastructure cost |
 |---|---|---|
-| **LEVEL_0** | 10 saved Logs Insights queries. Zero compute, zero storage. | $0 (queries cost ~$0.005 per GB scanned) |
-| **LEVEL_1** | + Lambda parser, EMF metrics, CloudWatch dashboard, 3 alarms | ~$7-10/month |
-| **LEVEL_2** | + S3 Span_Store, Firehose, Glue, Athena views, named queries | ~$10-15/month |
+| **LEVEL_0** | 10 saved Logs Insights queries. No compute, no storage. | No fixed cost; Logs Insights bills per GB scanned |
+| **LEVEL_1** | + Lambda parser, EMF metrics, CloudWatch dashboard, 3 alarms | Low; see the cost model below |
+| **LEVEL_2** | + S3 Span_Store, Firehose, Glue, Athena views, named queries | Low; see the cost model below |
 
 ---
 
@@ -383,21 +384,23 @@ Both connect to Athena over JDBC/ODBC:
 
 ## Cost model
 
-### Verified infrastructure costs (at ~10,000 contacts/month, ~47,000 spans)
+At a modest volume (roughly 10,000 contacts and 47,000 spans per month), running
+costs are low. The main contributors are:
 
-| Resource | Monthly cost | Notes |
-|---|---|---|
-| Lambda | ~$1-2 | 512MB, ~5s avg, 47k invocations |
-| DynamoDB | <$1 | On-demand, ~10k items, TTL cleanup |
-| S3 Span_Store | <$1 | ~100-200MB/month Parquet-ready JSON |
-| Firehose | ~$1 | Per-GB ingestion |
-| CloudWatch custom metrics | ~$3-5 | 5 dimension sets × ~13 metrics |
-| CloudWatch dashboard | $3 | Fixed per dashboard |
-| Athena queries (on-demand) | <$1 | $5/TB scanned, data is ~MB |
-| Glue Data Catalog | $0 | Free for first million objects |
-| **Total Level 2** | **~$10-15/month** | |
-| **Total Level 1** (no S3/Firehose/Glue) | **~$7-10/month** | |
-| **Total Level 0** | **$0** | Queries cost ~$0.005/GB scanned |
+| Resource | Cost driver |
+|---|---|
+| Lambda | Per-invocation, one invocation per log batch |
+| DynamoDB | On-demand reads/writes for the channel cache, with TTL cleanup |
+| S3 Span_Store | Storage for the Parquet-ready span records |
+| Firehose | Per-GB ingestion |
+| CloudWatch custom metrics | Bounded by the five fixed dimension sets |
+| CloudWatch dashboard | Per dashboard |
+| Athena queries | Per GB scanned; date partitioning keeps scans small |
+| Glue Data Catalog | Free within the first million objects |
+
+For an estimate against your own volume, please use the
+[AWS Pricing Calculator](https://calculator.aws/). Level 0 has no fixed cost —
+Logs Insights bills only for data scanned.
 
 ### What drives cost up
 
@@ -455,9 +458,9 @@ near-real-time path in this sample.
 
 ## Validation dataset
 
-Built and validated against: account `101506645078`, region `eu-west-2`,
-3 assistant log groups, 1,205 events, 296 spans, 132 token-bearing inference
-spans, 28 contacts, 23 Jul - 6 Aug 2026.
+Built and validated against a single Amazon Connect instance in `eu-west-2`,
+across 3 assistant log groups, 1,205 events, 296 spans, 132 token-bearing
+inference spans, and 28 contacts (23 Jul – 6 Aug 2026).
 
 **Key findings:**
 - 74.8% of voice dead air is model inference time (independently corroborated
@@ -529,7 +532,7 @@ docs/                      Architecture diagrams
   architecture.drawio      Editable source (3 pages)
   architecture.png         Deployment-level architecture
   data-flow.png            Lambda processing flow
-  signal-coverage.png      Coverage vs OOTB and the data lake
+  signal-coverage.png      Coverage vs built-in metrics and the data lake
 
 DESIGN.md                  Evidence base (preserved as-is)
 ```
