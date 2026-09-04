@@ -16,6 +16,10 @@ import cfnresponse
 VIEWS = {
     "v_span_enriched": """
 CREATE OR REPLACE VIEW v_span_enriched AS
+-- Base view. Deduplicates by span_id so that repeated backfills or
+-- at-least-once Firehose delivery never inflate any downstream metric.
+-- Every other view reads FROM v_span_enriched, not FROM spans, so the
+-- dedup is enforced in exactly one place.
 SELECT
     span_id, parent_span_id, span_name, status, error_type,
     start_timestamp, end_timestamp, duration_ms,
@@ -33,7 +37,16 @@ SELECT
     assistant_id, session_id,
     contact_id, initial_contact_id, instance_id,
     channel, escalated, dt
-FROM spans
+FROM (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY span_id
+            ORDER BY dt DESC
+        ) AS _dedup_rn
+    FROM spans
+    WHERE span_id IS NOT NULL
+)
+WHERE _dedup_rn = 1
 """,
     "v_contact_rollup": """
 CREATE OR REPLACE VIEW v_contact_rollup AS
@@ -56,7 +69,7 @@ SELECT
     COUNT(CASE WHEN span_name = 'invoke_agent' THEN 1 END) AS turns,
     COUNT(CASE WHEN status = 'ERROR' AND error_type = 'barge_in' THEN 1 END) AS barge_in_count,
     MAX(dt) AS dt
-FROM spans
+FROM v_span_enriched
 WHERE initial_contact_id IS NOT NULL
 GROUP BY initial_contact_id, channel, instance_id
 """,
@@ -79,7 +92,7 @@ SELECT
     SUM(CASE WHEN status = 'ERROR' AND error_type = 'barge_in' THEN usage_total_tokens ELSE 0 END) AS barge_in_discarded_tokens,
     SUM(CASE WHEN has_cache_fields = true THEN 1 ELSE 0 END) AS spans_with_cache,
     SUM(CASE WHEN span_name = 'inference' THEN 1 ELSE 0 END) AS inference_total
-FROM spans
+FROM v_span_enriched
 WHERE ai_agent_name IS NOT NULL
 GROUP BY ai_agent_name, ai_agent_version, channel, dt
 """,
@@ -105,7 +118,7 @@ SELECT
         ELSE NULL
     END AS cache_hit_ratio,
     SUM(usage_total_tokens) AS total_tokens
-FROM spans
+FROM v_span_enriched
 WHERE span_name = 'inference' AND usage_total_tokens IS NOT NULL
 GROUP BY ai_agent_name, ai_agent_version, channel
 """,
@@ -125,7 +138,7 @@ SELECT
     CAST(SUM(chars_reasoning) AS DOUBLE) / NULLIF(SUM(chars_text) + SUM(chars_reasoning) + SUM(chars_tool), 0) AS share_incl_tool,
     CAST(SUM(chars_reasoning) AS DOUBLE) / NULLIF(SUM(chars_text) + SUM(chars_reasoning), 0) AS share_excl_tool,
     COUNT(CASE WHEN chars_reasoning = 0 OR chars_reasoning IS NULL THEN 1 END) AS zero_reasoning_spans
-FROM spans
+FROM v_span_enriched
 WHERE span_name = 'inference' AND chars_text IS NOT NULL
 GROUP BY ai_agent_name, channel
 """,
@@ -143,7 +156,7 @@ SELECT
          THEN AVG(CAST(duration_ms AS DOUBLE)) / AVG(CAST(usage_output_tokens AS DOUBLE))
          ELSE NULL
     END AS ms_per_output_token
-FROM spans
+FROM v_span_enriched
 WHERE span_name = 'inference' AND duration_ms IS NOT NULL
 GROUP BY ai_agent_name, request_model, channel
 """,
@@ -162,7 +175,7 @@ FROM (
             PARTITION BY initial_contact_id
             ORDER BY start_timestamp
         ) AS turn_ordinal
-    FROM spans
+    FROM v_span_enriched
     WHERE span_name = 'inference' AND usage_input_tokens IS NOT NULL
           AND initial_contact_id IS NOT NULL
 )
@@ -179,7 +192,7 @@ SELECT
     AVG(time_to_first_token_ms) AS avg_ttft_ms,
     SUM(CASE WHEN has_cache_fields = true THEN 1 ELSE 0 END) AS spans_with_cache,
     COUNT(DISTINCT ai_agent_name) AS agents_using
-FROM spans
+FROM v_span_enriched
 WHERE span_name = 'inference' AND request_model IS NOT NULL
 GROUP BY request_model
 """,
@@ -193,12 +206,14 @@ SELECT
     COUNT(CASE WHEN reconciliation_state = 'SKIPPED_NON_NUMERIC' THEN 1 END) AS skipped_non_numeric,
     COUNT(CASE WHEN reconciliation_state = 'SKIPPED_ABSENT_TOTAL' THEN 1 END) AS skipped_absent_total,
     COUNT(CASE WHEN channel = 'UNRESOLVED' THEN 1 END) AS unresolved_channels
-FROM spans
+FROM v_span_enriched
 GROUP BY dt
 """,
 }
 
-DROP_VIEWS = [f"DROP VIEW IF EXISTS {name}" for name in VIEWS]
+# Drop dependents first, base view (v_span_enriched) last, because the other
+# views depend on it. Reverse of the creation order.
+DROP_VIEWS = [f"DROP VIEW IF EXISTS {name}" for name in reversed(list(VIEWS))]
 
 
 def run_query(client, sql, database, workgroup):
@@ -229,6 +244,12 @@ def handler(event, context):
     client = boto3.client("athena", region_name=region)
 
     request_type = event.get("RequestType", "Create")
+    # Stable physical id so a Version-property change is treated as an in-place
+    # UPDATE, not a REPLACE. Without this, cfnresponse defaults the id to the log
+    # stream (which changes every invocation), CloudFormation replaces the
+    # resource, and the old resource's DELETE fires AFTER the new CREATE — which
+    # would drop the views we just recreated.
+    physical_id = "connect-ai-curated-views"
     try:
         if request_type in ("Create", "Update"):
             results = []
@@ -238,7 +259,7 @@ def handler(event, context):
             cfnresponse.send(event, context, cfnresponse.SUCCESS, {
                 "ViewsCreated": len(results),
                 "Views": ",".join(results),
-            })
+            }, physicalResourceId=physical_id)
         elif request_type == "Delete":
             for sql in DROP_VIEWS:
                 try:
@@ -247,10 +268,10 @@ def handler(event, context):
                     pass  # Best effort on delete
             cfnresponse.send(event, context, cfnresponse.SUCCESS, {
                 "ViewsDropped": len(DROP_VIEWS),
-            })
+            }, physicalResourceId=physical_id)
     except Exception as e:
         print(f"Error: {e}")
         cfnresponse.send(event, context, cfnresponse.FAILED, {
             "Error": str(e)[:200],
-        })
+        }, physicalResourceId=physical_id)
 '''

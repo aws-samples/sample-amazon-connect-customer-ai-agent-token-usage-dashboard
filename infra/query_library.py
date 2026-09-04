@@ -18,6 +18,21 @@ Usage:
 
 Note: `output` is a reserved word in Logs Insights. Use aliases like `out_tokens`.
 The span field uses Java toString format — `parse` extracts values positionally.
+
+Deduplication at Level 0:
+  These queries read the raw CloudWatch log stream directly. Each
+  TRANSCRIPT_AI_AGENT_TRACE event is written once by the Connect service, and
+  the backfill script writes to Firehose/S3 — never back to CloudWatch Logs — so
+  the log stream itself is not affected by backfill re-runs. Level 0 therefore
+  does not accumulate duplicates the way the S3 Span_Store can.
+
+  If you ever need to guard against an at-least-once redelivery from the service,
+  parse `span_id` and aggregate with `count_distinct(span_id)` instead of
+  `count(*)`, e.g.:
+      | parse span "span_id=*, " as span_id
+      | stats count_distinct(span_id) as unique_spans
+  The Level 1/2 path (S3 + Athena) enforces span_id dedup in the v_span_enriched
+  view, so Level 0 is the only surface where you would add this manually.
 """
 
 # Each query is a dict with name, description, and the Insights query string.

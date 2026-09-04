@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """Backfill: replay existing assistant log events through the pipeline.
 
-Reads all events from the three log groups, parses them, resolves channels,
+Reads all events from the configured log groups, parses them, resolves channels,
 and writes enriched rows to Firehose — exactly what the subscription filter does,
 but for events that already existed before the filter was attached.
+
+Safe to re-run. Firehose delivery is at-least-once and this script does not
+check what already landed in S3, so re-running WILL write the same spans again.
+That is intentional and harmless: every Athena curated view deduplicates by
+`span_id` (see v_span_enriched), so no query, dashboard, or metric ever reflects
+a duplicate regardless of how many times backfill runs. If you want the raw S3
+objects themselves to stay unique, empty the `spans/` prefix before re-running.
 
 Usage:
     python scripts/backfill.py
 
-Environment (set or inherit from the deployed Lambda):
-    DELIVERY_STREAM_NAME, CHANNEL_CACHE_TABLE, CONNECT_INSTANCE_IDS
+Environment (required — no hardcoded defaults):
+    AWS_REGION, ASSISTANT_LOG_GROUPS, DELIVERY_STREAM_NAME,
+    CHANNEL_CACHE_TABLE, CONNECT_INSTANCE_IDS
 """
 
 import json

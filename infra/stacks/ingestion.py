@@ -311,7 +311,7 @@ class IngestionStack(cdk.Stack):
             service_token=views_fn.function_arn,
             properties={
                 # Force update when views change (hash of the handler code)
-                "Version": "2024-08-24-v1",
+                "Version": "2024-08-24-v3-dedup-stableid",
             },
         )
         views_cr.node.add_dependency(table)
