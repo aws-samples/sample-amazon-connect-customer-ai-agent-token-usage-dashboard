@@ -1,4 +1,4 @@
-# Amazon Connect Customer AI Agent Token Efficiency
+# Amazon Connect Customer AI Agent Token Usage Insights
 
 > **Sample code for educational purposes only. Not for production use.**
 

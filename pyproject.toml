@@ -1,7 +1,7 @@
 [project]
-name = "amazon-connect-customer-ai-agent-token-efficiency"
+name = "amazon-connect-customer-ai-agent-token-usage-insights"
 version = "0.1.0"
-description = "Token, cache and reasoning efficiency observability for Amazon Connect Customer AI agents"
+description = "Token, cache and reasoning usage insights for Amazon Connect Customer AI agents"
 requires-python = ">=3.11"
 dependencies = [
     "boto3>=1.34.0",
