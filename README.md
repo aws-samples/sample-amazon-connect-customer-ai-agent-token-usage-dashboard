@@ -1,4 +1,4 @@
-# Amazon Connect AI Agent Token Efficiency Dashboard
+# Amazon Connect Customer AI Agent Token Efficiency
 
 > **Sample code for educational purposes only. Not for production use.**
 
