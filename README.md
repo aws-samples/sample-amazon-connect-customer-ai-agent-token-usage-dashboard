@@ -19,6 +19,33 @@ call.
 
 ---
 
+## Production readiness
+
+This is sample code that demonstrates a pattern. It is not production-ready as
+delivered. Before any production use, please:
+
+1. **Deploy to a non-production environment first** and validate the behaviour
+   against your own Amazon Connect traffic.
+2. **Evaluate it against your organization's security, compliance, and
+   operational requirements**, and review it with your security team.
+3. **Add the controls appropriate to your workload** before promoting to
+   production. Depending on your requirements, these commonly include:
+   - Encryption with AWS KMS customer-managed keys (CMKs) for the S3 Span_Store
+     and the DynamoDB table
+   - Least-privilege IAM scoping tightened to your accounts and resources
+   - Backup and retention (for example, S3 versioning and longer log retention)
+   - Centralized logging, monitoring, and alerting to your standards
+   - Network and account isolation per your landing-zone controls
+4. **Complete your own security review** and align the deployment with the
+   [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/).
+
+The [Security](#security) section explains how to report issues. This sample
+applies a baseline of safe hardening (S3 public-access block, TLS enforcement,
+S3-managed encryption, access logging, and DynamoDB point-in-time recovery), but
+the controls above remain your responsibility for a production deployment.
+
+---
+
 ## What this adds
 
 These signals are not available in the built-in AI Agent Performance dashboard or
