@@ -49,12 +49,30 @@ class IngestionStack(cdk.Stack):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # -- S3 access-logs bucket -------------------------------------------
+        # Dedicated target for SpanStore server access logs (CKV_AWS_18).
+        access_logs_bucket = s3.Bucket(
+            self,
+            "SpanStoreAccessLogs",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            enforce_ssl=True,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+        )
+
         # -- S3 Span_Store ---------------------------------------------------
         bucket = s3.Bucket(
             self,
             "SpanStore",
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
+            # Explicit hardening (CKV_AWS_53/54/55/56, CKV_AWS_18):
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            enforce_ssl=True,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            server_access_logs_bucket=access_logs_bucket,
+            server_access_logs_prefix="span-store-access-logs/",
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="IntelligentTiering",
@@ -158,6 +176,11 @@ class IngestionStack(cdk.Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
             time_to_live_attribute="ttl",
+            # Point-in-time recovery (CKV_AWS_28). The table is a rebuildable
+            # cache, so this is defence-in-depth rather than a hard requirement.
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
         )
 
         # -- Firehose --------------------------------------------------------

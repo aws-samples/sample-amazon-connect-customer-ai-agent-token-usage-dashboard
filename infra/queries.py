@@ -5,6 +5,15 @@ Firehose at Level 2). Each answers a question the CloudWatch metrics cannot:
 they need ordering, windowing, or joins across spans within a contact.
 
 All queries are channel-scoped. Replace ${DATABASE} and ${TABLE} at deploy time.
+
+Security note (Bandit B608 — reviewed false positive):
+    The SQL below is built with f-strings, but the only interpolated values are
+    the module constants DATABASE and TABLE defined immediately below. No value
+    on any of these queries comes from user input, a request, or an external
+    source, so there is no SQL-injection vector. A static analyser flags the
+    f-string-plus-SQL pattern regardless of whether the inputs are tainted;
+    this instance is a false positive and is intentionally left as plain,
+    readable SQL rather than obscured behind string concatenation.
 """
 
 from __future__ import annotations

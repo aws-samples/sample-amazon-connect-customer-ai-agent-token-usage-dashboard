@@ -34,3 +34,7 @@ markers = [
     "property: hypothesis property-based tests",
     "calibration: statistical gate calibration against falsified findings",
 ]
+
+[tool.bandit]
+# Exclude scratch analysis scripts (not part of the sample) and tests.
+exclude_dirs = [".scratch", "tests"]

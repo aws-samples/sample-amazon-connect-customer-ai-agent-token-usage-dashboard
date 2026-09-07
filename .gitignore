@@ -46,3 +46,6 @@ build.log
 
 # Kiro IDE config (not part of the sample)
 .kiro/
+
+# Security scan reports (not part of the published sample)
+*token-usage-insights.json
