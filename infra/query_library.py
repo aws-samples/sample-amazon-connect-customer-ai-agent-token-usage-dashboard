@@ -90,8 +90,8 @@ filter event_type = "TRANSCRIPT_AI_AGENT_TRACE"
     "ttft_percentiles": {
         "name": "L0 - TTFT Percentiles",
         "description": (
-            "Time to first token (dead air) at p50, p90, p99 per agent. "
-            "This is the silence the caller hears before the agent speaks. "
+            "Time to first token at p50, p90, p99 per agent. "
+            "This is how quickly the AI agent's response begins. "
             "Not available in the OOTB AI Agent Performance dashboard."
         ),
         "query": """\
@@ -181,9 +181,9 @@ filter event_type = "TRANSCRIPT_AI_AGENT_TRACE"
     "barge_in_waste": {
         "name": "L0 - Barge-In Token Waste",
         "description": (
-            "Tokens wasted due to barge-in (caller spoke over the agent). "
-            "These are tokens paid for that the customer never heard. "
-            "Only relevant for voice channel."
+            "Tokens discarded when a voice invocation is abandoned mid-generation "
+            "(error_type=barge_in). These are tokens generated but not used. "
+            "Applies to the voice channel only."
         ),
         "query": """\
 filter event_type = "TRANSCRIPT_AI_AGENT_TRACE"

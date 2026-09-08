@@ -1,8 +1,9 @@
 """Reasoning apportionment.
 
-Roughly half of everything these agents generate is reasoning the customer never
-sees. At ~9.25 ms per output token that is paid for in dead air, and no Connect
-metric or data lake column exposes it — ``output_token`` is a single total.
+Roughly half of everything these agents generate is reasoning that is not
+surfaced in the response. At ~9.25 ms per output token that still adds to
+response delay, and no Connect metric or data lake column exposes it —
+``output_token`` is a single total.
 
 Method (same-grain)
 -------------------
@@ -68,7 +69,7 @@ class ReasoningSplit:
         return self.chars_reasoning / denom if denom else 0.0
 
     def reasoning_ms(self, ms_per_output_token: float) -> float:
-        """Generation time spent on output the customer never sees."""
+        """Generation time spent on output that is not surfaced in the response."""
         return self.tokens_reasoning * ms_per_output_token
 
 

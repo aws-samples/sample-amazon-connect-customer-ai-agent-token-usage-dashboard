@@ -164,7 +164,7 @@ SELECT
         CAST(chars_reasoning AS DOUBLE) / NULLIF(chars_reasoning + chars_text + chars_tool, 0),
         0.9
     ) AS p90_per_span_share,
-    -- Impact: estimated seconds of dead air from reasoning
+    -- Impact: estimated seconds of added response delay from reasoning
     sum(tokens_reasoning) * 9.25 / 1000.0 AS total_reasoning_seconds,
     sum(tokens_reasoning) * 9.25 / 1000.0
         / NULLIF(count(DISTINCT contact_id), 0) AS reasoning_seconds_per_contact,

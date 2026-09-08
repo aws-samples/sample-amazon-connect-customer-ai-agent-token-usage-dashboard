@@ -223,8 +223,9 @@ inference spans, and 28 contacts (23 Jul – 6 Aug 2026).
 
 Key findings:
 
-- Model inference time accounted for 74.8% of voice dead air, independently
-  corroborated through Contact Lens `NonTalkTime` across 7 voice contacts.
+- Model inference time accounted for 74.8% of the measured response delay on
+  voice contacts, independently corroborated through Contact Lens `NonTalkTime`
+  across 7 voice contacts.
 - 9.25 ms per output token (bootstrap CI [7.94, 11.60]; approximately 108
   tokens/second).
 - Reasoning was 43.7% of output characters (51.2% excluding tool payloads) on the

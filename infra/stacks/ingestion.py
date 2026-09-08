@@ -384,16 +384,16 @@ class IngestionStack(cdk.Stack):
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
 
-        # Alarm 2: TTFT dead air — p90 exceeding caller patience
+        # Alarm 2: TTFT — p90 exceeding the responsiveness target
         ttft_alarm = cloudwatch.Alarm(
             self,
             "TTFTAlarm",
             alarm_name="ConnectAI-TTFT-P90-DeadAir",
             alarm_description=(
-                "Time-to-first-token p90 exceeds threshold. This directly "
-                "measures dead air the caller hears before the agent speaks. "
-                "Not available in OOTB metrics (AVG_AI_PROMPT_INVOCATION_LATENCY "
-                "is total duration, not TTFT). Replace threshold from baseline."
+                "Time-to-first-token p90 exceeds threshold. This measures how "
+                "quickly the AI agent's response begins. Not available in OOTB "
+                "metrics (AVG_AI_PROMPT_INVOCATION_LATENCY is total duration, "
+                "not TTFT). Replace threshold from baseline."
             ),
             metric=cloudwatch.Metric(
                 namespace=metric_namespace,
@@ -401,7 +401,7 @@ class IngestionStack(cdk.Stack):
                 statistic="p90",
                 period=Duration.hours(1),
             ),
-            # PLACEHOLDER: 3000ms = 3s, typical caller patience limit
+            # PLACEHOLDER: 3000ms = 3s responsiveness target
             threshold=3000,
             evaluation_periods=3,
             datapoints_to_alarm=2,

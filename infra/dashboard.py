@@ -86,12 +86,12 @@ def build_dashboard_body(region: str) -> str:
             ],
             "period": PERIOD,
             "region": region,
-            "title": "Time to First Token (Dead Air Driver)",
+            "title": "Time to First Token (Response Start)",
             "view": "timeSeries",
             "yAxis": {"left": {"label": "ms"}},
             "annotations": {
                 "horizontal": [
-                    {"label": "3s caller patience", "value": 3000, "color": "#d13212"},
+                    {"label": "3s responsiveness target", "value": 3000, "color": "#d13212"},
                 ],
             },
         },
