@@ -56,7 +56,7 @@ the Connect analytics data lake. Each row cites the log field it derives from.
 | Prompt cache economics | No cache columns in the `ai_prompt` data lake table. 81% of tokens were uncached in the validation dataset. | Log span fields |
 | Time to first token (TTFT) | The data lake carries total latency only. TTFT is how quickly the AI agent's recommendation begins to appear to the human agent. | `time_to_first_token_ms` |
 | Reasoning token share | `output_token` is a single total. Roughly 44% of output was reasoning that is not surfaced in the recommendation. | `output_messages` parsing |
-| Barge-in token waste (voice) | The data lake carries a boolean `invocation_success`. This attributes tokens discarded on an abandoned voice invocation. | `status=ERROR, error_type=barge_in` |
+| Barge-in token waste | The data lake carries a boolean `invocation_success`. This attributes tokens discarded when an invocation is abandoned mid-generation (typically a voice barge-in). | `status=ERROR, error_type=barge_in` |
 | Output ceiling proximity | `request_max_tokens` is absent from the data lake. Detects truncation risk. | Span field comparison |
 | Alarms within minutes | The data lake is daily batch. These EMF-metric alarms fire within minutes. | EMF metrics |
 | Context growth curve | Requires turn ordering within a contact. Not available as a metric. | Span ordering |
@@ -252,7 +252,7 @@ Removes all resources. S3 bucket is configured with `autoDeleteObjects`.
 ### CloudWatch Dashboard: `ConnectAI-TokenEfficiency`
 
 12 metric widgets across 4 sections:
-- **Token Economics:** Tokens/contact, TTFT (response start), barge-in waste (voice)
+- **Token Economics:** Tokens/contact, TTFT (response start), barge-in waste
 - **Cache Economics:** Hit ratio, token composition (cache vs fresh), total vs cached
 - **Reasoning Efficiency:** Share of output, reasoning vs total tokens, output ceiling hits
 - **Operational Health:** Reconciliation and apportionment, decode speed monitor, pipeline throughput

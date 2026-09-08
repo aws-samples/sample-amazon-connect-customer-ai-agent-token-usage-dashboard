@@ -183,7 +183,7 @@ filter event_type = "TRANSCRIPT_AI_AGENT_TRACE"
         "description": (
             "Tokens discarded when a voice invocation is abandoned mid-generation "
             "(error_type=barge_in). These are tokens generated but not used. "
-            "Applies to the voice channel only."
+            "Typically a voice-channel event; the metric is reported per channel."
         ),
         "query": """\
 filter event_type = "TRANSCRIPT_AI_AGENT_TRACE"

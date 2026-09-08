@@ -179,7 +179,7 @@ class TypedSpan:
     @property
     def is_barge_in_discard(self) -> bool:
         """Inference that was generated but discarded when a voice invocation
-        was abandoned mid-generation (a voice-channel barge-in event).
+        was abandoned mid-generation (a barge-in event, typically on voice).
 
         Distinct from a genuine failure — this is why error_type is retained
         rather than collapsed into a success boolean.
