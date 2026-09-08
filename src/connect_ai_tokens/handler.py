@@ -12,9 +12,9 @@ Two behaviours worth stating because they are easy to get wrong:
 skipped. Raising would make CloudWatch retry the whole batch, re-emitting metrics
 for every record that already succeeded.
 
-**Spans are packed before Firehose.** Firehose bills per GB in 5 KB increments, so
-a single ~2 KB span record is billed as 5 KB — a 2.5x penalty. Records are packed
-to approach 1 MB instead.
+**Spans are packed before Firehose.** Amazon Data Firehose applies a minimum
+billable record size, so many tiny records cost more than fewer larger ones.
+Records are packed to approach 1 MB to stay efficient.
 """
 
 from __future__ import annotations

@@ -279,16 +279,16 @@ infra/                     AWS CDK application
 scripts/
   backfill.py              Historical data loader (safe to re-run)
 
-tests/                     147 tests (pytest and Hypothesis)
-  fixtures/                Validated production spans
-  test_span_parser.py      32 tests, including the round-trip property
-  test_reconciliation.py   11 tests (0-mismatch assertion)
-  test_reasoning.py        13 tests (conservation property)
-  test_channel.py          16 tests (cache, retry, negative cache)
-  test_metrics.py          15 tests (dimension sets, cache state)
-  test_stats_gate.py       20 tests (suppression calibration)
-  test_handler.py          14 tests (batch isolation, EMF output)
-  test_e2e.py              26 tests (full-pipeline replay against the manifest)
+tests/                     Unit and property tests (pytest and Hypothesis)
+  fixtures/                Redacted sample spans and expected aggregates
+  test_span_parser.py      Span parsing, including the round-trip property
+  test_reconciliation.py   Token identity reconciliation (0-mismatch assertion)
+  test_reasoning.py        Reasoning apportionment (conservation property)
+  test_channel.py          Channel cache, retry, negative cache
+  test_metrics.py          Dimension sets and cache state
+  test_stats_gate.py       Suppression calibration
+  test_handler.py          Batch isolation and EMF output
+  test_e2e.py              Full-pipeline replay against the manifest
 
 docs/                      Architecture diagrams and reference
   architecture.drawio      Editable source (3 pages)

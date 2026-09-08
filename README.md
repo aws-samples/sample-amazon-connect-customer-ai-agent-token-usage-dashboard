@@ -1,11 +1,11 @@
 # Amazon Connect Customer AI Agent Token Usage Dashboard
 
-> **Sample code for educational purposes only. Not for production use.**
+> **Sample code provided as a reference implementation. Evaluate, test, and
+> harden it for your own requirements before any production use.**
 
 [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-yellow.svg)](https://opensource.org/licenses/MIT-0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![AWS CDK v2](https://img.shields.io/badge/AWS_CDK-v2-orange.svg)](https://docs.aws.amazon.com/cdk/v2/guide/home.html)
-[![Tests](https://img.shields.io/badge/tests-147%20passed-brightgreen.svg)]()
 
 Token, cache, reasoning, and time-to-first-token (TTFT) insights for Amazon
 Connect AI agents (Amazon Q in Connect). This sample surfaces usage signals that
