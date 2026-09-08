@@ -8,10 +8,9 @@
 [![AWS CDK v2](https://img.shields.io/badge/AWS_CDK-v2-orange.svg)](https://docs.aws.amazon.com/cdk/v2/guide/home.html)
 
 Token, cache, reasoning, and time-to-first-token (TTFT) insights for Amazon
-Connect AI agents (Amazon Q in Connect). This sample surfaces usage signals that
-the built-in AI Agent Performance dashboard and the Connect analytics data lake
-do not expose, and adds an insights layer that ranks them into evidence-backed
-actions.
+Connect Customer AI agents. This sample surfaces usage signals that the built-in
+AI Agent Performance dashboard and the Connect analytics data lake do not expose,
+and adds an insights layer that ranks them into evidence-backed actions.
 
 It reads from Amazon Connect Assistant event logs and `qconnect:ListSpans`. It
 requires no Lake Formation resource share and no `BatchAssociateAnalyticsDataSet`
@@ -137,7 +136,7 @@ For an estimate against your own volume, use the
 
 1. **AWS credentials** for the target account with permissions listed below.
 
-2. **Connect AI agent logging enabled** on each assistant. This requires the
+2. **Amazon Connect Customer AI agent logging enabled** on each assistant. This requires the
    `wisdom:AllowVendedLogDeliveryForResource` permission, then the CloudWatch
    log-delivery APIs (run in order, per assistant):
    ```bash
