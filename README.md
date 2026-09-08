@@ -95,32 +95,8 @@ intentionally leaves them in place:
 Please use those directly from the AI Agent Performance dashboard or
 `connect:GetMetricDataV2`.
 
-## What is out of scope
-
-| Capability | Why excluded | Where to get it |
-|---|---|---|
-| Model-evaluated quality scores | LLM-evaluated, 24h refresh cycle | `ai_session.goal_success_rate`, `faithfulness_score`, `completeness_score` |
-| Customer sentiment | Tested and falsified: r=+0.043, n=7, near-constant DV | `contact_lens_conversational_analytics.sentiment_*` |
-| Talk-time, silence, interruption measures | Contact Lens voice-only, disjoint from chat | `contact_lens_conversational_analytics.non_talk_time_total_ms` |
-| Thumbs-up / thumbs-down feedback | Captured via a different event | `TRANSCRIPT_RESULT_FEEDBACK` events |
-| Token cost in dollars | Connect bills per minute/message, not per token | Cost Explorer `ai-end-customer-mins`, `ai-chat-message` |
-
-These four capability classes are available via the Connect analytics data lake as
-an optional upgrade path (see below).
-
-## Falsified findings (excluded by evidence)
-
-Two widgets were designed, tested, and deliberately excluded:
-
-1. **Token consumption vs customer sentiment** — Correlation r=+0.043 at n=7 with
-   sentiment taking only 4 distinct values (4 of 7 at zero). All correlations weak
-   and positive (opposite to hypothesis). The relationship does not exist in this
-   data.
-
-2. **Input tokens drive total invocation duration** — t=1.74 (not significant) on
-   the 132-span corpus, but t significant on the 106-span corpus. Sign flips
-   across subgroups. Status: unresolved, not refuted. Excluded for measured sample
-   dependence — a metric that reverses between samples should not be on a dashboard.
+For what is intentionally out of scope, and the candidate findings that were
+tested and excluded, see [Reference](docs/REFERENCE.md).
 
 ---
 
@@ -267,32 +243,6 @@ Removes all resources. S3 bucket is configured with `autoDeleteObjects`.
 
 ---
 
-## Required IAM permissions
-
-### Lambda execution role (provisioned automatically)
-
-| Action | Scope |
-|---|---|
-| `connect:DescribeContact` | Configured instance ARNs only (`instance/*/contact/*`) |
-| `firehose:PutRecordBatch` | The provisioned delivery stream |
-| `dynamodb:GetItem`, `PutItem` | The channel cache table |
-| `s3:PutObject` | The Span_Store bucket |
-
-### Views Creator Lambda (provisioned automatically)
-
-| Action | Scope |
-|---|---|
-| `athena:StartQueryExecution`, `GetQueryExecution` | `*` (Athena has no resource-level scoping) |
-| `glue:GetDatabase`, `GetTable`, `GetPartitions`, `CreateTable`, `UpdateTable`, `DeleteTable` | The `connect_ai_token_efficiency` database |
-| `s3:GetObject`, `PutObject`, `ListBucket`, `GetBucketLocation` | Span_Store bucket + Athena results bucket |
-
-### Deploying user/role
-
-Standard CDK deployment permissions (CloudFormation, IAM, Lambda, S3, DynamoDB,
-Firehose, Glue, Athena, CloudWatch, Logs).
-
----
-
 ## What you get after deploy
 
 ### CloudWatch Dashboard: `ConnectAI-TokenEfficiency`
@@ -354,216 +304,19 @@ Database: `connect_ai_token_efficiency`
 
 ---
 
-## Calibrated constants
+## Reference documentation
 
-All measured against the validation dataset (n=132 token-bearing spans).
+For deeper detail, see [`docs/REFERENCE.md`](docs/REFERENCE.md):
 
-| Constant | Value | Provenance |
-|---|---|---|
-| Characters per input token | 3.63 | Regression on `usage_input_tokens + cache` vs `len(system_instructions + input_messages)`, R²=0.971 |
-| Prompt token intercept | 403 tokens | Same regression intercept (tool-definition overhead) |
-| Characters per output token | 3.45 | `output_messages` chars / `usage_output_tokens` |
-| ms per output token | 9.25 | Bootstrap CI [7.94, 11.60]. Decode-time r=+0.870. Validated 7 ways. |
-| ms per 1,000 input tokens (TTFT) | 33.6 | Monotonic across 5 quintiles. Excludes one 8,420ms cold-start outlier. |
-
-**Important:** `len(text) / 4` underestimates token count by a median of 14.6%.
-Use `len(text) / 3.63 + 403` instead.
-
-**Model caveat:** 131 of 132 spans are `eu.anthropic.claude-haiku-4-5`. These
-are Haiku numbers. Recompute per model as traffic diversifies.
-
----
-
-## Connecting BI tools
-
-The curated views are the interface. Any SQL-capable tool can consume them. See
-current pricing on each service's pricing page.
-
-### Amazon Managed Grafana
-
-The only option that queries both CloudWatch metrics and Athena in one pane.
-
-1. Create a Grafana workspace in the same Region.
-2. Add the CloudWatch data source (configured via IAM).
-3. Add the Athena data source, pointing at the `connect_ai_token_efficiency` database.
-4. Build panels from the views.
-
-### Amazon QuickSight
-
-Suited to business users. Connects to Athena natively.
-
-1. Create a dataset from the Athena data source.
-2. Select the `connect_ai_token_efficiency` database and a view (for example, `v_agent_daily`).
-3. Build analyses and dashboards.
-
-QuickSight reads Athena, not CloudWatch metrics. Natural-language querying
-requires a paid QuickSight tier.
-
-### Tableau / Power BI
-
-Both connect to Athena over JDBC/ODBC:
-
-- Endpoint: `athena.<region>.amazonaws.com`, port 443
-- Database: `connect_ai_token_efficiency`
-- Authentication: IAM credentials or SAML
-
----
-
-## Cost model
-
-At a modest volume (roughly 10,000 contacts and 47,000 spans per month), running
-costs are low. The main contributors are:
-
-| Resource | Cost driver |
-|---|---|
-| Lambda | Per-invocation, one invocation per log batch |
-| DynamoDB | On-demand reads/writes for the channel cache, with TTL cleanup |
-| S3 Span_Store | Storage for the Parquet-ready span records |
-| Firehose | Per-GB ingestion |
-| CloudWatch custom metrics | Bounded by the five fixed dimension sets |
-| CloudWatch dashboard | Per dashboard |
-| Athena queries | Per GB scanned; date partitioning keeps scans small |
-| Glue Data Catalog | Free within the first million objects |
-
-For an estimate against your own volume, please use the
-[AWS Pricing Calculator](https://calculator.aws/). Level 0 has no fixed cost —
-Logs Insights bills only for data scanned.
-
-### What drives cost up
-
-- **Dimension cardinality:** 5 fixed dimension sets keeps it bounded. Adding more
-  dimensions multiplies metric cost.
-- **Firehose minimum billing:** 5KB per record. Packing to ~1MB records (as
-  implemented) avoids the 2.5x penalty.
-- **Athena scan size:** Date partitioning + columnar views keeps scans small.
-
----
-
-## Log retention constraint
-
-Assistant log group retention bounds how far Level 0 and Level 1 can look back.
-In the validation account, two of three log groups retained 14 days and one
-retained 30 days.
-
-**Consequences:**
-- A 14-day alarm baseline on a 14-day log group has zero margin.
-- Re-retrieving the corpus after the retention window returned 928 of the
-  original 1,205 events (23% lost).
-- The Level 2 Span_Store is the only durable history, which is the strongest
-  reason to adopt Level 2 over Level 1.
-
-Raise log retention, or shorten the baseline window, so the baseline can fill.
-
----
-
-## Optional upgrade: Connect analytics data lake
-
-For the four capability classes logs cannot supply, associate the 5 AI datasets:
-
-```bash
-aws connect batch-associate-analytics-data-set \
-  --instance-id <your-instance-id> \
-  --data-set-ids ai_prompt ai_session ai_agent ai_tool ai_agent_knowledge_base \
-  --target-account-id <your-account-id>
-```
-
-**Warning:** This creates a Lake Formation resource share.
-
-| Dataset | What it adds |
-|---|---|
-| `ai_prompt` | `input_token`, `output_token`, `model_id` — raw tokens and model attribution that partially overlap this sample. Lacks cache tokens, TTFT, and the reasoning split. |
-| `ai_session` | `goal_success_rate`, `faithfulness_score`, `completeness_score`, `is_handed_off` |
-| `ai_tool` | `ai_tool_name`, accuracy scores |
-| `ai_agent` | Invocation counts, helpfulness ratings |
-| `ai_agent_knowledge_base` | Knowledge base reference tracking |
-
-Join to `contact_lens_conversational_analytics` on `contact_id` for sentiment and
-talk-time measures. The data lake is daily batch, so it does not replace the
-near-real-time path in this sample.
-
----
-
-## Validation dataset
-
-Built and validated against a single Amazon Connect instance in `eu-west-2`,
-across 3 assistant log groups, 1,205 events, 296 spans, 132 token-bearing
-inference spans, and 28 contacts (23 Jul – 6 Aug 2026).
-
-**Key findings:**
-- 74.8% of voice dead air is model inference time (independently corroborated
-  via Contact Lens `NonTalkTime` across 7 voice contacts)
-- 9.25 ms per output token (bootstrap CI [7.94, 11.60], 108 tokens/sec)
-- 43.7% of output characters are reasoning (51.2% excluding tool payloads) on
-  the original 132-span corpus. Current retained corpus (106 spans): 41.7% / 48.3%
-- Token identity verified with 0 mismatches across 132 spans
-- `usage_input_tokens` is FRESH input only — summing input + output undercounts
-  by 4,301 tokens/turn when caching is active
-- Channel split is 50/50 VOICE/CHAT (14/14 contacts)
-- Chat escalation rate is 86% vs 32% blended — never blend channels
-- Assistant log delivery lag: p50 5.9s, p90 10.4s, p99 11.4s, max 22.7s
-
-**Sample-size caveat:** 28 contacts, 132 token-bearing spans, 7 non-contiguous
-days, 3 of 6 agents at 5 or fewer calls, 131 of 132 spans on a single model.
-Sufficient to validate schema and method. Insufficient to set thresholds.
-
----
-
-## Evidence base
-
-All coefficients, field-availability facts, and negative results are recorded in
-`DESIGN.md` in the repository root. That document is the evidence base and is
-preserved as-is.
-
----
-
-## Repository structure
-
-```
-src/connect_ai_tokens/     Core library (Lambda handler + all components)
-  span_parser.py           Depth-aware parser for Java toString span format
-  reconciliation.py        Token identity verification
-  reasoning.py             Reasoning apportionment from output_messages
-  channel.py               Channel resolution via DescribeContact
-  metrics.py               EMF metric publisher (5 bounded dimension sets)
-  stats_gate.py            Statistical integrity guardrails
-  insights.py              Regression detector, recommendations, comparison
-  model_catalog.py         ListModels wrapper
-  trace_viewer.py          Custom widget Lambda (voice + chat)
-  handler.py               Lambda entry point
-  config.py                Environment-driven configuration
-  constants.py             Calibrated constants with provenance
-
-infra/                     CDK application
-  app.py                   Entry point (account, region, log groups)
-  stacks/ingestion.py      All resources (Lambda, DDB, Firehose, S3, Glue, etc.)
-  dashboard.py             CloudWatch dashboard JSON
-  queries.py               Athena named queries
-  query_library.py         Level 0 Logs Insights queries
-  views_cr.py              Custom resource for Athena view creation
-
-scripts/
-  backfill.py              Historical data loader (idempotent-safe)
-
-tests/                     147 tests (pytest + hypothesis)
-  fixtures/                Validated production spans
-  test_span_parser.py      32 tests including round-trip property
-  test_reconciliation.py   11 tests (0-mismatch assertion)
-  test_reasoning.py        13 tests (conservation property)
-  test_channel.py          16 tests (cache, retry, negative cache)
-  test_metrics.py          15 tests (dimension sets, cache state)
-  test_stats_gate.py       20 tests (suppression calibration)
-  test_handler.py          14 tests (batch isolation, EMF output)
-  test_e2e.py              26 tests (full-pipeline replay against the manifest)
-
-docs/                      Architecture diagrams
-  architecture.drawio      Editable source (3 pages)
-  architecture.png         Deployment-level architecture
-  data-flow.png            Lambda processing flow
-  signal-coverage.png      Coverage vs built-in metrics and the data lake
-
-DESIGN.md                  Evidence base (preserved as-is)
-```
-
+- What is out of scope, and the findings tested and excluded
+- Required IAM permissions (per role)
+- Calibrated constants and their provenance
+- Connecting BI tools (Amazon Managed Grafana, Amazon QuickSight, Tableau, Power BI)
+- Cost model and cost drivers
+- Log retention constraint
+- Optional upgrade: Connect analytics data lake
+- Validation dataset and sample-size caveats
+- Evidence base and repository structure
 
 ---
 
