@@ -110,8 +110,8 @@ Data sources (Connect Assistant logs, `qconnect:ListSpans`,
 levels. Level 0 runs saved Logs Insights queries with no infrastructure. Level 1
 adds a subscription filter, a Lambda parser, EMF metrics, a dashboard, and
 alarms. Level 2 adds a Firehose to an S3 Span_Store, a Glue catalog, and Athena
-curated views. Grafana, QuickSight, Tableau/Power BI, and the AWS consoles
-consume the outputs.
+curated views. Amazon Managed Grafana, Amazon QuickSight, third-party BI tools,
+and the AWS consoles can consume the outputs.
 
 The diagram source is [`docs/architecture.drawio`](docs/architecture.drawio)
 (open with the Draw.io editor). Two companion views:
@@ -316,7 +316,7 @@ For deeper detail, see [`docs/REFERENCE.md`](docs/REFERENCE.md):
 - What is out of scope, and the findings tested and excluded
 - Required IAM permissions (per role)
 - Calibrated constants and their provenance
-- Connecting BI tools (Amazon Managed Grafana, Amazon QuickSight, Tableau, Power BI)
+- Connecting BI tools (Amazon Managed Grafana, Amazon QuickSight, third-party BI tools)
 - Cost model and cost drivers
 - Log retention constraint
 - Optional upgrade: Connect analytics data lake

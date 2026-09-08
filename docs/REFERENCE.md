@@ -126,9 +126,10 @@ Suited to business users. Connects to Athena natively.
 QuickSight reads Athena, not CloudWatch metrics. Natural-language querying requires
 a paid QuickSight tier.
 
-### Tableau and Microsoft Power BI
+### Third-party BI tools
 
-Both connect to Athena over JDBC/ODBC:
+Third-party business intelligence tools (for example, Tableau or Microsoft
+Power BI) can connect to Athena over JDBC/ODBC:
 
 - Endpoint: `athena.<region>.amazonaws.com`, port 443
 - Database: `connect_ai_token_efficiency`
