@@ -139,14 +139,14 @@ Power BI) can connect to Athena over JDBC/ODBC:
 
 ## Cost model
 
-At a modest volume (roughly 10,000 contacts and 47,000 spans per month), running
-costs are low. The main contributors are:
+Cost scales with your contact and span volume. The resources this sample
+provisions, and what drives each one's cost, are:
 
 | Resource | Cost driver |
 |---|---|
 | AWS Lambda | Per invocation, one invocation per log batch |
 | Amazon DynamoDB | On-demand reads and writes for the channel cache, with TTL cleanup |
-| Amazon S3 (Span_Store) | Storage for the Parquet-ready span records |
+| Amazon S3 (Span_Store) | Storage for the span records |
 | Amazon Data Firehose | Per-GB ingestion |
 | CloudWatch custom metrics | Bounded by the five fixed dimension sets |
 | CloudWatch dashboard | Per dashboard |

@@ -4,7 +4,7 @@ Creates:
   - Lambda (span parser + channel resolver + metric publisher + Firehose writer)
   - DynamoDB table (channel cache, on-demand, TTL enabled)
   - Subscription filter per assistant log group
-  - Firehose delivery stream -> S3 (Parquet via Glue)
+  - Firehose delivery stream -> S3 (JSON, queried via Glue + Athena)
   - Glue database + table
   - S3 bucket (Span_Store)
   - CloudWatch dashboard (gap metrics only)

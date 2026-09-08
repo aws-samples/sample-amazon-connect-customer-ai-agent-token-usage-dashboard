@@ -252,11 +252,11 @@ Removes all resources. S3 bucket is configured with `autoDeleteObjects`.
 
 ### CloudWatch Dashboard: `ConnectAI-TokenEfficiency`
 
-13 widgets across 4 sections:
-- **Token Economics:** Tokens/contact, TTFT p50/p90 with 3s threshold, barge-in waste
-- **Cache Economics:** Hit ratio, token composition (read/write/fresh), total vs cached
-- **Reasoning Efficiency:** Share (incl/excl tool), absolute tokens, output ceiling hits
-- **Operational Health:** Reconciliation mismatches, decode speed monitor, pipeline throughput
+12 metric widgets across 4 sections:
+- **Token Economics:** Tokens/contact, TTFT (dead air driver), barge-in waste
+- **Cache Economics:** Hit ratio, token composition (cache vs fresh), total vs cached
+- **Reasoning Efficiency:** Share of output, reasoning vs total tokens, output ceiling hits
+- **Operational Health:** Reconciliation and apportionment, decode speed monitor, pipeline throughput
 
 ### 3 CloudWatch Alarms
 
