@@ -14,7 +14,7 @@ from connect_ai_tokens.channel import (
 )
 
 REAL_ARN = (
-    "arn:aws:wisdom:eu-west-2:101506645078:session/"
+    "arn:aws:wisdom:eu-west-2:123456789012:session/"
     "1522ee99-f6f3-4641-ad8e-89f7348c577d/17395249-611b-4056-abd9-cfa53ce64f87"
 )
 
@@ -65,8 +65,8 @@ def test_parses_real_session_arn():
         None,
         "",
         "not-an-arn",
-        "arn:aws:wisdom:eu-west-2:101506645078:assistant/abc",
-        "arn:aws:wisdom:eu-west-2:101506645078:session/abc",
+        "arn:aws:wisdom:eu-west-2:123456789012:assistant/abc",
+        "arn:aws:wisdom:eu-west-2:123456789012:session/abc",
     ],
 )
 def test_rejects_malformed_session_arn(arn):

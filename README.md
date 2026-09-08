@@ -1,4 +1,4 @@
-# Amazon Connect Customer AI Agent Token Usage Insights
+# Amazon Connect Customer AI Agent Token Usage Dashboard
 
 > **Sample code for educational purposes only. Not for production use.**
 
@@ -29,7 +29,8 @@ delivered. Before any production use, please:
 2. **Evaluate it against your organization's security, compliance, and
    operational requirements**, and review it with your security team.
 3. **Add the controls appropriate to your workload** before promoting to
-   production. Depending on your requirements, these commonly include:
+   production. Depending on your requirements, these commonly include (but are
+   not limited to):
    - Encryption with AWS KMS customer-managed keys (CMKs) for the S3 Span_Store
      and the DynamoDB table
    - Least-privilege IAM scoping tightened to your accounts and resources
@@ -120,11 +121,15 @@ The diagram source is [`docs/architecture.drawio`](docs/architecture.drawio)
 
 ### Deployment levels (additive)
 
-| Level | What you get | Infrastructure cost |
-|---|---|---|
-| **LEVEL_0** | 10 saved Logs Insights queries. No compute, no storage. | No fixed cost; Logs Insights bills per GB scanned |
-| **LEVEL_1** | + Lambda parser, EMF metrics, CloudWatch dashboard, 3 alarms | Low; see the cost model below |
-| **LEVEL_2** | + S3 Span_Store, Firehose, Glue, Athena views, named queries | Low; see the cost model below |
+| Level | What you get |
+|---|---|
+| **LEVEL_0** | 10 saved Logs Insights queries. No compute, no storage. |
+| **LEVEL_1** | + Lambda parser, EMF metrics, CloudWatch dashboard, 3 alarms |
+| **LEVEL_2** | + S3 Span_Store, Firehose, Glue, Athena views, named queries |
+
+Cost drivers per level are described in [Reference](docs/REFERENCE.md#cost-model).
+For an estimate against your own volume, use the
+[AWS Pricing Calculator](https://calculator.aws/).
 
 ---
 

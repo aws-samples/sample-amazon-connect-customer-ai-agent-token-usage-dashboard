@@ -118,7 +118,7 @@ def recommend_enable_caching(
         return None
 
     # Conservative: estimate the system prompt portion that would be cached
-    # (the first turn's cache_write from the Bet365 pattern was 4,301 tokens)
+    # (in the sample corpus, the first turn's cache_write was 4,301 tokens)
     est_saved_tokens = tokens_per_turn * 0.5  # system prompt is ~50% of turn 1
     est_seconds = est_saved_tokens * turns_per_contact * C.MS_PER_1K_INPUT_TOKENS_TTFT / 1000
 

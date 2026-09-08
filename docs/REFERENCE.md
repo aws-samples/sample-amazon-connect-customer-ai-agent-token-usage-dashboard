@@ -1,7 +1,7 @@
 # Reference
 
 Detailed reference material for the Amazon Connect Customer AI Agent Token Usage
-Insights sample. For an overview, deployment steps, and prerequisites, see the
+Dashboard sample. For an overview, deployment steps, and prerequisites, see the
 [README](../README.md).
 
 ## Contents
@@ -149,20 +149,22 @@ costs are low. The main contributors are:
 | Amazon Data Firehose | Per-GB ingestion |
 | CloudWatch custom metrics | Bounded by the five fixed dimension sets |
 | CloudWatch dashboard | Per dashboard |
-| Amazon Athena | Per GB scanned; date partitioning keeps scans small |
-| AWS Glue Data Catalog | Free within the first million objects |
+| Amazon Athena | Data scanned per query; date partitioning keeps scans small |
+| AWS Glue Data Catalog | Catalog object count |
 
 For an estimate against your own volume, use the
-[AWS Pricing Calculator](https://calculator.aws/). Level 0 has no fixed cost;
-Logs Insights bills only for data scanned.
+[AWS Pricing Calculator](https://calculator.aws/). Level 0 provisions no standing
+infrastructure.
 
 ### What drives cost up
 
 - **Dimension cardinality.** Five fixed dimension sets keep the metric count
-  bounded. Adding dimensions multiplies the metric cost.
-- **Firehose minimum billing.** Firehose bills per GB in 5 KB increments (a 3 KB
-  record is billed as 5 KB). Packing records to approximately 1 MB, as
-  implemented, avoids that penalty.
+  bounded. Adding dimensions increases the number of custom metrics.
+- **Firehose record size.** Firehose is billed per record with a minimum billable
+  record size, so many tiny records cost more than fewer larger ones. This sample
+  packs records to approximately 1 MB to stay efficient. See the
+  [Amazon Data Firehose pricing page](https://aws.amazon.com/firehose/pricing/)
+  for the current increment.
 - **Athena scan size.** Date partitioning and columnar views keep scans small.
 
 ---

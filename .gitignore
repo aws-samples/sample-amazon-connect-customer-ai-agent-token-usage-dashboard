@@ -49,3 +49,7 @@ build.log
 
 # Security scan reports (not part of the published sample)
 *token-usage-insights.json
+*token-usage-dashboard.json
+
+# Internal design/provenance notes (not part of the published sample)
+DESIGN.md

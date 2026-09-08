@@ -53,22 +53,22 @@
   },
   "cache": {
     "state_by_agent": {
-      "Veolia-Waste-SelfService-Agent": {
+      "SelfService-Agent-A": {
         "state": "OFF",
         "spans": 46,
         "tokens": 195158
       },
-      "Bet365-Self-Service-Agent": {
+      "SelfService-Agent-B": {
         "state": "ON",
         "spans": 6,
         "tokens": 62632
       },
-      "tagalog-support": {
+      "support-agent-c": {
         "state": "OFF",
         "spans": 47,
         "tokens": 391372
       },
-      "demo-estonian": {
+      "demo-agent-d": {
         "state": "OFF",
         "spans": 5,
         "tokens": 45593

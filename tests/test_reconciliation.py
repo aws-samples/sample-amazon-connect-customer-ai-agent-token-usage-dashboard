@@ -28,7 +28,7 @@ def test_identity_holds_without_cache():
 
 
 def test_identity_holds_with_cache():
-    """The real Bet365 shape: fresh input is small, cache carries the rest."""
+    """The real SelfService-Agent-B shape: fresh input is small, cache carries the rest."""
     r = reconcile(
         span(
             usage_input_tokens=488,

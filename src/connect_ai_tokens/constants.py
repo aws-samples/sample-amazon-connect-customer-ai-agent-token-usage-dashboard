@@ -4,9 +4,9 @@ Every value here was measured against real Connect Assistant logs. The docstring
 on each is its provenance — do not change a value without re-running the
 corresponding script in tests/fixtures/scripts/ and updating the provenance note.
 
-Validation dataset: account 101506645078, eu-west-2, 3 assistant log groups,
+Validation dataset: a single AWS account and Region, 3 assistant log groups,
 1,205 events, 296 spans, 132 token-bearing inference spans, 28 contacts,
-23 Jul - 6 Aug 2026.
+over a two-week window.
 """
 
 from __future__ import annotations

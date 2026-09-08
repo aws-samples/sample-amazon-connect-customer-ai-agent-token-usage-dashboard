@@ -1,5 +1,5 @@
 [project]
-name = "amazon-connect-customer-ai-agent-token-usage-insights"
+name = "amazon-connect-customer-ai-agent-token-usage-dashboard"
 version = "0.1.0"
 description = "Token, cache and reasoning usage insights for Amazon Connect Customer AI agents"
 requires-python = ">=3.11"
