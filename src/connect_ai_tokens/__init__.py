@@ -1,4 +1,4 @@
-"""Token consumption observability for Amazon Connect Customer AI agents.
+"""Token usage observability for Amazon Connect Customer AI agents.
 
 Reads ``TRANSCRIPT_AI_AGENT_TRACE`` events from Amazon Connect Customer AI agent
 (Connect Assistant) CloudWatch log groups, or spans from the

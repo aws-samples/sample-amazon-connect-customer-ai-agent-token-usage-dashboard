@@ -157,9 +157,9 @@ filter event_type = "TRANSCRIPT_AI_AGENT_TRACE"
     "tokens_per_contact": {
         "name": "L0 - Tokens per Contact",
         "description": (
-            "Token consumption grouped by contact. Shows the distribution — "
-            "identify the expensive outliers. Sort by total to find the "
-            "contacts driving cost."
+            "Token usage grouped by contact. Shows the distribution — "
+            "identify the high-usage outliers. Sort by total to find the "
+            "heaviest contacts to review for efficiency."
         ),
         "query": """\
 filter event_type = "TRANSCRIPT_AI_AGENT_TRACE"

@@ -181,12 +181,13 @@ ORDER BY reasoning_share_incl_tool DESC
     },
     "token_outlier_contacts": {
         "description": (
-            "Top-N contacts by total token consumption. These are the tail that "
-            "drives cost — the p90/max outliers. Join to contact records for "
-            "business context (queue, disconnect reason, handle time)."
+            "Top-N contacts by total token usage. These are the high-usage tail "
+            "— the p90/max outliers worth reviewing for efficiency. Join to "
+            "contact records for business context (queue, disconnect reason, "
+            "handle time)."
         ),
         "sql": f"""
--- Token Outlier Contacts: the expensive tail
+-- Token Outlier Contacts: the high-usage tail
 -- Join these contact_ids to CTR for business context
 SELECT
     contact_id,
